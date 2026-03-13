@@ -1,8 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { resolve } from 'path';
+import { mkdtempSync, writeFileSync, unlinkSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
 import { lambdaAdapter } from '../adapters/lambda.js';
+import { databaseAdapter, validateReadOnlySQL, buildDatabaseQuerier } from '../adapters/database.js';
 import { SearchIndex } from '../src/search.js';
 import { formatSearchResults } from '../src/typegen.js';
 import type { ToolDefinition } from '../src/types.js';
@@ -301,5 +305,355 @@ describe('Cross-Adapter Search', () => {
     const marketResults = index.search('market reports');
     expect(marketResults.length).toBeGreaterThan(0);
     expect(marketResults[0].tool.domain).toBe('docs');
+  });
+});
+
+// ─── Database Adapter ─────────────────────────────────────────────
+
+describe('Database Adapter', () => {
+  let tools: ToolDefinition[];
+  let tmpDir: string;
+  let dbPath: string;
+
+  beforeAll(async () => {
+    // Create a temp SQLite DB with users + orders tables
+    tmpDir = mkdtempSync(join(tmpdir(), 'cmx-db-test-'));
+    dbPath = join(tmpDir, 'test.db');
+
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath);
+
+    db.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT,
+        age INTEGER
+      );
+      CREATE TABLE orders (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        amount REAL,
+        status TEXT DEFAULT 'pending'
+      );
+      INSERT INTO users VALUES (1, 'Alice', 'alice@test.com', 30);
+      INSERT INTO users VALUES (2, 'Bob', 'bob@test.com', 25);
+      INSERT INTO users VALUES (3, 'Charlie', 'charlie@test.com', 35);
+      INSERT INTO orders VALUES (1, 1, 99.99, 'completed');
+      INSERT INTO orders VALUES (2, 1, 49.50, 'pending');
+      INSERT INTO orders VALUES (3, 2, 150.00, 'completed');
+    `);
+    db.close();
+
+    tools = await databaseAdapter.parse(dbPath, { domain: 'testdb' });
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('discovers all tables', () => {
+    // 2 table query tools + 1 rawQuery = 3
+    expect(tools.length).toBe(3);
+  });
+
+  it('generates query tools per table', () => {
+    const names = tools.map(t => t.name);
+    expect(names).toContain('queryUsers');
+    expect(names).toContain('queryOrders');
+    expect(names).toContain('rawQuery');
+  });
+
+  it('generates parameters from columns', () => {
+    const queryUsers = tools.find(t => t.name === 'queryUsers')!;
+    expect(queryUsers.parameters.length).toBe(4);
+
+    const idParam = queryUsers.parameters.find(p => p.name === 'id')!;
+    expect(idParam.type).toBe('number');
+    expect(idParam.required).toBe(false);
+
+    const nameParam = queryUsers.parameters.find(p => p.name === 'name')!;
+    expect(nameParam.type).toBe('string');
+
+    const ageParam = queryUsers.parameters.find(p => p.name === 'age')!;
+    expect(ageParam.type).toBe('number');
+  });
+
+  it('maps column types correctly', () => {
+    const queryOrders = tools.find(t => t.name === 'queryOrders')!;
+    const amount = queryOrders.parameters.find(p => p.name === 'amount')!;
+    expect(amount.type).toBe('number');
+
+    const status = queryOrders.parameters.find(p => p.name === 'status')!;
+    expect(status.type).toBe('string');
+  });
+
+  it('marks all tools as readOnly', () => {
+    for (const tool of tools) {
+      expect(tool.readOnly).toBe(true);
+    }
+  });
+
+  it('sets transport to database', () => {
+    for (const tool of tools) {
+      expect(tool.transport).toBe('database');
+    }
+  });
+
+  it('sets domain on all tools', () => {
+    for (const tool of tools) {
+      expect(tool.domain).toBe('testdb');
+    }
+  });
+
+  it('filters tables with options.tables (include)', async () => {
+    const filtered = await databaseAdapter.parse(dbPath, {
+      domain: 'testdb',
+      tables: ['users'],
+    } as any);
+    const names = filtered.map(t => t.name);
+    expect(names).toContain('queryUsers');
+    expect(names).not.toContain('queryOrders');
+    expect(names).toContain('rawQuery'); // rawQuery is always included
+  });
+
+  it('filters tables with options.exclude', async () => {
+    const filtered = await databaseAdapter.parse(dbPath, {
+      domain: 'testdb',
+      exclude: ['orders'],
+    } as any);
+    const names = filtered.map(t => t.name);
+    expect(names).toContain('queryUsers');
+    expect(names).not.toContain('queryOrders');
+  });
+
+  it('throws for non-existent database file', async () => {
+    await expect(
+      databaseAdapter.parse('/nonexistent/path.db', { domain: 'test' })
+    ).rejects.toThrow('Database file not found');
+  });
+});
+
+// ─── SQL Validation ──────────────────────────────────────────────
+
+describe('SQL Validation', () => {
+  it('allows SELECT statements', () => {
+    expect(validateReadOnlySQL('SELECT * FROM users').valid).toBe(true);
+    expect(validateReadOnlySQL('SELECT id, name FROM users WHERE age > 25').valid).toBe(true);
+  });
+
+  it('allows PRAGMA statements', () => {
+    expect(validateReadOnlySQL('PRAGMA table_info("users")').valid).toBe(true);
+  });
+
+  it('allows EXPLAIN statements', () => {
+    expect(validateReadOnlySQL('EXPLAIN SELECT * FROM users').valid).toBe(true);
+  });
+
+  it('rejects INSERT statements', () => {
+    const result = validateReadOnlySQL('INSERT INTO users VALUES (1, "test")');
+    expect(result.valid).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it('rejects UPDATE statements', () => {
+    const result = validateReadOnlySQL('UPDATE users SET name = "test"');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects DELETE statements', () => {
+    const result = validateReadOnlySQL('DELETE FROM users');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects DROP statements', () => {
+    const result = validateReadOnlySQL('DROP TABLE users');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects ALTER statements', () => {
+    const result = validateReadOnlySQL('ALTER TABLE users ADD COLUMN foo TEXT');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects multi-statement queries', () => {
+    const result = validateReadOnlySQL('SELECT 1; DROP TABLE users');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Multi-statement');
+  });
+
+  it('allows trailing semicolons', () => {
+    expect(validateReadOnlySQL('SELECT * FROM users;').valid).toBe(true);
+  });
+
+  it('rejects empty SQL', () => {
+    expect(validateReadOnlySQL('').valid).toBe(false);
+    expect(validateReadOnlySQL('   ').valid).toBe(false);
+  });
+});
+
+// ─── Database Querier (runtime) ──────────────────────────────────
+
+describe('Database Querier', () => {
+  let tmpDir: string;
+  let dbPath: string;
+  let querier: Map<string, (args: Record<string, unknown>) => Promise<unknown>>;
+
+  beforeAll(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'cmx-querier-test-'));
+    dbPath = join(tmpDir, 'test.db');
+
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT);
+      INSERT INTO users VALUES (1, 'Alice', 'alice@test.com');
+      INSERT INTO users VALUES (2, 'Bob', 'bob@test.com');
+    `);
+    db.close();
+
+    querier = await buildDatabaseQuerier(dbPath);
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('executes table query without filters', async () => {
+    const results = await querier.get('queryUsers')!({}) as any[];
+    expect(results.length).toBe(2);
+    expect(results[0].name).toBe('Alice');
+  });
+
+  it('filters table query by params', async () => {
+    const results = await querier.get('queryUsers')!({ name: 'Bob' }) as any[];
+    expect(results.length).toBe(1);
+    expect(results[0].email).toBe('bob@test.com');
+  });
+
+  it('executes raw SELECT query', async () => {
+    const results = await querier.get('rawQuery')!({ sql: 'SELECT COUNT(*) as cnt FROM users' }) as any[];
+    expect(results[0].cnt).toBe(2);
+  });
+
+  it('rejects raw INSERT query', async () => {
+    await expect(
+      querier.get('rawQuery')!({ sql: "INSERT INTO users VALUES (3, 'Eve', 'eve@test.com')" })
+    ).rejects.toThrow('SQL validation failed');
+  });
+
+  it('rejects raw DROP query', async () => {
+    await expect(
+      querier.get('rawQuery')!({ sql: 'DROP TABLE users' })
+    ).rejects.toThrow('SQL validation failed');
+  });
+});
+
+// ─── Memory Module ───────────────────────────────────────────────
+
+describe('Memory Module', () => {
+  let tmpDir: string;
+  let dbPath: string;
+  let mdPath: string;
+
+  beforeAll(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'cmx-memory-test-'));
+    dbPath = join(tmpDir, 'memory.db');
+    mdPath = join(tmpDir, 'test.md');
+
+    // Create a test markdown file
+    writeFileSync(mdPath, `# Test Project
+
+## People — Direct Reports & Team
+| Who | Role |
+|-----|------|
+| **Alice** | Engineering Lead |
+| **Bob** | Designer |
+
+## People — Investors & External
+| Who | Role |
+|-----|------|
+| **Charlie** | Lead Investor |
+
+## Portfolio — Properties
+| Property | Notes |
+|----------|-------|
+| Sunset Apartments | 48 units |
+| Oak Plaza | 120 units, renovated |
+
+## Other Entities
+| Name | What |
+|------|------|
+| Blue Fund | Investment vehicle |
+
+## Terms
+| Term | Meaning |
+|------|---------|
+| NOI | Net Operating Income |
+| Cap Rate | Capitalization Rate |
+`);
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('initializes memory database with all tables', async () => {
+    const { initMemoryDb } = await import('../src/memory.js');
+    initMemoryDb(dbPath);
+
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath, { readonly: true });
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+      .all() as { name: string }[];
+
+    const tableNames = tables.map(t => t.name).sort();
+    expect(tableNames).toContain('people');
+    expect(tableNames).toContain('properties');
+    expect(tableNames).toContain('entities');
+    expect(tableNames).toContain('terms');
+    expect(tableNames).toContain('memories');
+
+    db.close();
+  });
+
+  it('imports markdown tables correctly', async () => {
+    const { importMarkdown } = await import('../src/memory.js');
+    importMarkdown(dbPath, mdPath);
+
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath, { readonly: true });
+
+    // Check people
+    const people = db.prepare('SELECT * FROM people').all() as any[];
+    expect(people.length).toBe(3);
+    const alice = people.find((p: any) => p.name === 'Alice');
+    expect(alice).toBeDefined();
+    expect(alice.role).toBe('Engineering Lead');
+    expect(alice.category).toBe('team');
+
+    const charlie = people.find((p: any) => p.name === 'Charlie');
+    expect(charlie).toBeDefined();
+    expect(charlie.category).toBe('investor');
+
+    // Check properties
+    const properties = db.prepare('SELECT * FROM properties').all() as any[];
+    expect(properties.length).toBe(2);
+    expect(properties.some((p: any) => p.name === 'Sunset Apartments')).toBe(true);
+
+    // Check entities
+    const entities = db.prepare('SELECT * FROM entities').all() as any[];
+    expect(entities.length).toBe(1);
+    expect(entities[0].name).toBe('Blue Fund');
+
+    // Check terms
+    const terms = db.prepare('SELECT * FROM terms').all() as any[];
+    expect(terms.length).toBe(2);
+    expect(terms.some((t: any) => t.term === 'NOI')).toBe(true);
+    expect(terms.some((t: any) => t.term === 'Cap Rate')).toBe(true);
+
+    db.close();
   });
 });

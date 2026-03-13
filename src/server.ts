@@ -18,6 +18,7 @@ import { expressAdapter } from '../adapters/express.js';
 import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
 import { lambdaAdapter, buildLambdaInvoker } from '../adapters/lambda.js';
+import { databaseAdapter, buildDatabaseQuerier } from '../adapters/database.js';
 
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -43,6 +44,7 @@ export class CmxServer {
     this.registry.registerAdapter(openapiAdapter);
     this.registry.registerAdapter(markdownAdapter);
     this.registry.registerAdapter(lambdaAdapter);
+    this.registry.registerAdapter(databaseAdapter);
 
     this.server = new Server(
       { name: 'codemode-x', version: '0.1.0' },
@@ -86,6 +88,16 @@ export class CmxServer {
             `${domain.name}.${tool.name}`,
             invoker
           );
+        }
+      } else if (domain.adapter === 'database') {
+        // Database tools query SQLite directly
+        const querier = await buildDatabaseQuerier(String(domain.source));
+        const tools = this.registry.getToolsByDomain(domain.name);
+        for (const tool of tools) {
+          const impl = querier.get(tool.name);
+          if (impl) {
+            this.implementations.set(`${domain.name}.${tool.name}`, impl);
+          }
         }
       } else if (domain.adapter === 'markdown') {
         // Markdown tools return their stored content directly
