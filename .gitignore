@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.db
 .DS_Store
+.env*
 
 # Local config (may contain project-specific paths)
 codemode-x.config.js
