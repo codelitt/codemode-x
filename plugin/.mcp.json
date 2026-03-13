@@ -1,0 +1,8 @@
+{
+  "name": "codemode-x",
+  "version": "0.1.0",
+  "description": "Universal Code Mode — compress any API into 2 MCP tools",
+  "command": "node",
+  "args": ["plugin/start.mjs"],
+  "env": {}
+}

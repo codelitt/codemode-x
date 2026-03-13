@@ -1,0 +1,153 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Rent Comps API", "version": "1.0.0" },
+  "paths": {
+    "/properties": {
+      "get": {
+        "operationId": "listProperties",
+        "summary": "List all properties",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max items to return",
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A list of properties",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Property" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createProperty",
+        "summary": "Create a property",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string", "description": "Property name" },
+                  "address": { "type": "string", "description": "Street address" },
+                  "units": { "type": "integer", "description": "Number of units" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Property" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/properties/{propertyId}": {
+      "get": {
+        "operationId": "getPropertyById",
+        "summary": "Get a property by ID",
+        "parameters": [
+          {
+            "name": "propertyId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A property",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Property" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteProperty",
+        "summary": "Delete a property",
+        "parameters": [
+          {
+            "name": "propertyId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" }
+        }
+      }
+    },
+    "/properties/{propertyId}/comps": {
+      "get": {
+        "summary": "List comps for a property",
+        "parameters": [
+          {
+            "name": "propertyId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comparable properties",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "rent": { "type": "number" },
+                      "distance_miles": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Property": {
+        "type": "object",
+        "required": ["id", "name"],
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "address": { "type": "string" },
+          "property_class": {
+            "type": "string",
+            "enum": ["A", "B", "C"]
+          }
+        }
+      }
+    }
+  }
+}
