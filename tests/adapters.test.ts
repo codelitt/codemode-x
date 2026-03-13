@@ -7,6 +7,7 @@ import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
 import { lambdaAdapter } from '../adapters/lambda.js';
 import { databaseAdapter, validateReadOnlySQL, buildDatabaseQuerier } from '../adapters/database.js';
+import { pythonAdapter, buildPythonInvoker } from '../adapters/python.js';
 import { SearchIndex } from '../src/search.js';
 import { formatSearchResults } from '../src/typegen.js';
 import type { ToolDefinition } from '../src/types.js';
@@ -655,5 +656,150 @@ describe('Memory Module', () => {
     expect(terms.some((t: any) => t.term === 'Cap Rate')).toBe(true);
 
     db.close();
+  });
+});
+
+// ─── Python Adapter ──────────────────────────────────────────────
+
+describe('Python Adapter', () => {
+  let tools: ToolDefinition[];
+
+  beforeAll(async () => {
+    tools = await pythonAdapter.parse(
+      resolve(FIXTURES, 'sample-module.py'),
+      { domain: 'pymod' }
+    );
+  });
+
+  it('discovers public functions', () => {
+    expect(tools.length).toBe(4);
+  });
+
+  it('skips private functions (underscore prefix)', () => {
+    const names = tools.map(t => t.name);
+    expect(names).not.toContain('_internal_helper');
+  });
+
+  it('extracts function names', () => {
+    const names = tools.map(t => t.name).sort();
+    expect(names).toContain('get_users');
+    expect(names).toContain('get_user_by_id');
+    expect(names).toContain('create_user');
+    expect(names).toContain('calculate_total');
+  });
+
+  it('extracts parameters with types', () => {
+    const getUsers = tools.find(t => t.name === 'get_users')!;
+    expect(getUsers.parameters.length).toBe(2);
+
+    const limit = getUsers.parameters.find(p => p.name === 'limit')!;
+    expect(limit.type).toBe('number');
+    expect(limit.required).toBe(false);
+
+    const active = getUsers.parameters.find(p => p.name === 'active')!;
+    expect(active.type).toBe('boolean');
+  });
+
+  it('marks required parameters correctly', () => {
+    const createUser = tools.find(t => t.name === 'create_user')!;
+    const name = createUser.parameters.find(p => p.name === 'name')!;
+    expect(name.required).toBe(true);
+    expect(name.type).toBe('string');
+
+    const role = createUser.parameters.find(p => p.name === 'role')!;
+    expect(role.required).toBe(false);
+  });
+
+  it('extracts docstring as description', () => {
+    const getUsers = tools.find(t => t.name === 'get_users')!;
+    expect(getUsers.description).toContain('Fetch a list of users');
+  });
+
+  it('maps Python return types to TypeScript', () => {
+    const calcTotal = tools.find(t => t.name === 'calculate_total')!;
+    expect(calcTotal.returnType).toBe('number');
+
+    const getUsers = tools.find(t => t.name === 'get_users')!;
+    expect(getUsers.returnType).toContain('[]');
+  });
+
+  it('infers readOnly from function name', () => {
+    expect(tools.find(t => t.name === 'get_users')!.readOnly).toBe(true);
+    expect(tools.find(t => t.name === 'get_user_by_id')!.readOnly).toBe(true);
+    expect(tools.find(t => t.name === 'create_user')!.readOnly).toBe(false);
+    expect(tools.find(t => t.name === 'calculate_total')!.readOnly).toBe(true);
+  });
+
+  it('sets transport to python', () => {
+    for (const tool of tools) {
+      expect(tool.transport).toBe('python');
+    }
+  });
+
+  it('sets domain on all tools', () => {
+    for (const tool of tools) {
+      expect(tool.domain).toBe('pymod');
+    }
+  });
+
+  it('filters functions with options.functions (include)', async () => {
+    const filtered = await pythonAdapter.parse(
+      resolve(FIXTURES, 'sample-module.py'),
+      { domain: 'pymod', functions: ['get_users', 'get_user_by_id'] } as any,
+    );
+    expect(filtered.length).toBe(2);
+    const names = filtered.map(t => t.name);
+    expect(names).toContain('get_users');
+    expect(names).toContain('get_user_by_id');
+    expect(names).not.toContain('create_user');
+  });
+
+  it('filters functions with options.exclude', async () => {
+    const filtered = await pythonAdapter.parse(
+      resolve(FIXTURES, 'sample-module.py'),
+      { domain: 'pymod', exclude: ['create_user'] } as any,
+    );
+    const names = filtered.map(t => t.name);
+    expect(names).not.toContain('create_user');
+    expect(names).toContain('get_users');
+  });
+
+  it('throws for non-existent Python file', async () => {
+    await expect(
+      pythonAdapter.parse('/nonexistent/module.py', { domain: 'test' })
+    ).rejects.toThrow('Python source not found');
+  });
+
+  it('integrates with search index', () => {
+    const index = new SearchIndex();
+    index.index(tools);
+
+    const results = index.search('users');
+    expect(results.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Python Invoker (runtime) ────────────────────────────────────
+
+describe('Python Invoker', () => {
+  const fixturePath = resolve(FIXTURES, 'sample-module.py');
+
+  it('invokes a function and returns result', async () => {
+    const invoker = buildPythonInvoker(fixturePath, `${fixturePath}::get_user_by_id`);
+    const result = await invoker({ user_id: '42' }) as any;
+    expect(result.id).toBe('42');
+    expect(result.name).toBe('Alice');
+  });
+
+  it('invokes a function with default params', async () => {
+    const invoker = buildPythonInvoker(fixturePath, `${fixturePath}::get_users`);
+    const result = await invoker({ limit: 5 }) as any[];
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('invokes calculate_total correctly', async () => {
+    const invoker = buildPythonInvoker(fixturePath, `${fixturePath}::calculate_total`);
+    const result = await invoker({ prices: [10, 20, 30], tax_rate: 0.1 });
+    expect(result).toBeCloseTo(66.0);
   });
 });

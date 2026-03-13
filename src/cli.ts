@@ -238,6 +238,8 @@ async function runTest() {
   const { markdownAdapter } = await import('../adapters/markdown.js');
   const { lambdaAdapter } = await import('../adapters/lambda.js');
   const { databaseAdapter } = await import('../adapters/database.js');
+  const { pythonAdapter } = await import('../adapters/python.js');
+  const { mcpBridgeAdapter } = await import('../adapters/mcp-bridge.js');
 
   const config = await loadConfig(configPath);
 
@@ -249,6 +251,8 @@ async function runTest() {
   registry.registerAdapter(markdownAdapter);
   registry.registerAdapter(lambdaAdapter);
   registry.registerAdapter(databaseAdapter);
+  registry.registerAdapter(pythonAdapter);
+  registry.registerAdapter(mcpBridgeAdapter);
 
   for (const domain of config.domains) {
     try {

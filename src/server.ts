@@ -19,6 +19,8 @@ import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
 import { lambdaAdapter, buildLambdaInvoker } from '../adapters/lambda.js';
 import { databaseAdapter, buildDatabaseQuerier } from '../adapters/database.js';
+import { pythonAdapter, buildPythonInvoker } from '../adapters/python.js';
+import { mcpBridgeAdapter, buildMcpBridgeInvoker } from '../adapters/mcp-bridge.js';
 
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -45,6 +47,8 @@ export class CmxServer {
     this.registry.registerAdapter(markdownAdapter);
     this.registry.registerAdapter(lambdaAdapter);
     this.registry.registerAdapter(databaseAdapter);
+    this.registry.registerAdapter(pythonAdapter);
+    this.registry.registerAdapter(mcpBridgeAdapter);
 
     this.server = new Server(
       { name: 'codemode-x', version: '0.1.0' },
@@ -95,6 +99,24 @@ export class CmxServer {
         const tools = this.registry.getToolsByDomain(domain.name);
         for (const tool of tools) {
           const impl = querier.get(tool.name);
+          if (impl) {
+            this.implementations.set(`${domain.name}.${tool.name}`, impl);
+          }
+        }
+      } else if (domain.adapter === 'python') {
+        // Python tools invoke functions via subprocess
+        const tools = this.registry.getToolsByDomain(domain.name);
+        const pythonBin = String(domain.options?.python ?? 'python3');
+        for (const tool of tools) {
+          const invoker = buildPythonInvoker(String(domain.source), tool.route!, pythonBin);
+          this.implementations.set(`${domain.name}.${tool.name}`, invoker);
+        }
+      } else if (domain.adapter === 'mcp-bridge') {
+        // MCP bridge tools proxy through to an existing MCP server
+        const bridge = await buildMcpBridgeInvoker(domain.source);
+        const tools = this.registry.getToolsByDomain(domain.name);
+        for (const tool of tools) {
+          const impl = bridge.implementations.get(tool.name);
           if (impl) {
             this.implementations.set(`${domain.name}.${tool.name}`, impl);
           }

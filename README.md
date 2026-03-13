@@ -68,8 +68,8 @@ codemode-x uses adapters to understand different data sources. Each adapter intr
 | [`markdown`](#markdown) | Markdown files/globs | Indexes docs as searchable content | Done |
 | [`lambda`](#lambda-functions) | AWS Lambda functions | Manifest file or AWS discovery | Done |
 | [`database`](#database) | SQLite database file | Introspects schema, generates query tools | Done |
-| `python` | Python modules | — | Planned |
-| `mcp-bridge` | Existing MCP servers | — | Planned |
+| [`python`](#python) | Python modules | Introspects functions via subprocess | Done |
+| [`mcp-bridge`](#mcp-bridge) | Existing MCP servers | Bridges MCP tools into codemode-x | Done |
 
 ---
 
@@ -218,6 +218,85 @@ await sdk.data.rawQuery({
 Column types are mapped automatically: `INTEGER` → `number`, `TEXT`/`VARCHAR` → `string`, `REAL` → `number`, `BOOLEAN` → `boolean`.
 
 Full guide: [docs/database-adapter.md](docs/database-adapter.md)
+
+### Python
+
+Introspects Python modules via subprocess to extract function signatures, type hints, and docstrings. Each public function becomes an SDK method.
+
+```js
+export default {
+  sdkName: 'myapp',
+  domains: [
+    {
+      name: 'analytics',
+      adapter: 'python',
+      source: './lib/analytics.py',
+      options: {
+        python: 'python3',              // optional: path to interpreter
+        functions: ['run_report'],       // optional: only include these
+        // exclude: ['helper_fn'],       // or: exclude these
+      },
+    },
+  ],
+};
+```
+
+Given a Python function:
+
+```python
+def get_user_stats(user_id: str, days: int = 30) -> Dict[str, float]:
+    """Get usage statistics for a user over a time period."""
+    ...
+```
+
+Claude sees: `sdk.analytics.getUserStats({ user_id: string, days?: number }) → Record<string, number>`
+
+Python type hints map automatically: `str` → `string`, `int`/`float` → `number`, `bool` → `boolean`, `List[X]` → `X[]`, `Optional[X]` → `X | null`.
+
+Functions are called via subprocess — Python runs in its own process with params as JSON. No shared memory, no import conflicts.
+
+Full guide: [docs/python-adapter.md](docs/python-adapter.md)
+
+### MCP Bridge
+
+Connects to an existing MCP server and wraps its tools as codemode-x SDK methods. This bridges any MCP-compatible tool server into the 2-tool architecture.
+
+```js
+export default {
+  sdkName: 'myapp',
+  domains: [
+    {
+      name: 'github',
+      adapter: 'mcp-bridge',
+      source: 'node /path/to/github-mcp-server.js',
+      options: {
+        tools: ['search_repos', 'get_file'],  // optional: only include these
+        // exclude: ['delete_repo'],            // or: exclude these
+      },
+    },
+  ],
+};
+```
+
+The source can be a command string or a config object:
+
+```js
+// Command string
+source: 'python -m my_mcp_server'
+
+// Config object (for env vars, custom args)
+source: {
+  command: 'node',
+  args: ['./mcp-server/index.js', '--port', '3000'],
+  env: { API_KEY: 'xxx' },
+}
+```
+
+codemode-x connects via stdio transport, discovers all tools via `listTools()`, and maps their JSON Schema parameters to typed SDK methods. At runtime, `cmx_execute` proxies calls through the MCP client.
+
+This means you can take any existing MCP server — GitHub, Slack, Postgres, custom internal tools — and collapse them all into Claude's 2-tool interface with full search across all of them.
+
+Full guide: [docs/mcp-bridge-adapter.md](docs/mcp-bridge-adapter.md)
 
 ## Memory database
 
@@ -383,7 +462,7 @@ User query → cmx_search → FTS5/BM25 index → typed SDK signatures (~500 tok
                                 ↓
 User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.method()
                                                               ↓
-                                              HTTP fetch / Lambda.invoke() / SQLite query
+                                              HTTP / Lambda.invoke() / SQLite / Python subprocess / MCP proxy
 ```
 
 ### Security
@@ -430,6 +509,8 @@ npm run test:live
 
 - [Lambda Adapter](docs/lambda-adapter.md) — manifest format, AWS discovery, tagging convention, filtering
 - [Database Adapter](docs/database-adapter.md) — SQL validation, type mapping, table filtering
+- [Python Adapter](docs/python-adapter.md) — type mapping, subprocess execution, docstring parsing
+- [MCP Bridge Adapter](docs/mcp-bridge-adapter.md) — connecting existing MCP servers, JSON Schema mapping
 - [Memory Database](docs/memory-database.md) — schema, CLI commands, markdown import format
 
 ## License
