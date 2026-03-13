@@ -3,6 +3,7 @@ dist/
 *.db
 .DS_Store
 .env*
+CLAUDE.md
 
 # Local config (may contain project-specific paths)
 codemode-x.config.js
