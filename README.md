@@ -300,57 +300,24 @@ Full guide: [docs/mcp-bridge-adapter.md](docs/mcp-bridge-adapter.md)
 
 ## Memory database
 
-codemode-x includes a built-in memory system that converts markdown into a queryable SQLite database. This gives Claude structured access to your project context — team members, key entities, terminology, and anything else you track in markdown tables.
+Pair codemode-x with [memory-x](https://github.com/codelitt/memory-x) to give Claude queryable, persistent memory backed by SQLite. memory-x turns any markdown files into structured tables — no hardcoded schemas, it dynamically infers structure from your content.
 
 ### Setup
 
 ```bash
-# Create the database
-npx codemode-x memory init
+# Install memory-x
+npm install -g memory-x
 
-# Import your markdown context
-npx codemode-x memory import ./CLAUDE.md
+# Create and populate a memory database
+memoryx init
+memoryx import ./CLAUDE.md
+memoryx import ./docs/
 
-# (Optional) specify a custom db path
-npx codemode-x memory init ./data/memory.db
-npx codemode-x memory import ./CLAUDE.md ./data/memory.db
+# Check what was created
+memoryx status
 ```
 
-### Schema
-
-The memory database has 5 tables designed to capture common project context:
-
-| Table | Purpose | Example use cases |
-|-------|---------|-------------------|
-| `people` | Team members, stakeholders, contacts | Engineering team, clients, vendors |
-| `properties` | Key assets or resources | Products, services, infrastructure, real estate |
-| `entities` | Organizations, accounts, projects | Companies, funds, partner orgs |
-| `terms` | Domain-specific terminology | Acronyms, jargon, business terms |
-| `memories` | Generic key-value storage | Anything that doesn't fit the above |
-
-### How import works
-
-The importer reads markdown tables and routes them to the right database table based on section headings:
-
-```markdown
-## Team
-| Who | Role |
-|-----|------|
-| Alice | Engineering Lead |     → people table (category: 'team')
-
-## External Partners
-| Who | Role |
-|-----|------|
-| Bob | Design Agency Lead |     → people table (category: 'investor')
-
-## Terms
-| Term | Meaning |
-|------|---------|
-| SLA | Service Level Agreement | → terms table
-| RPO | Recovery Point Objective | → terms table
-```
-
-### Using it with the database adapter
+### Using it with codemode-x
 
 Add the memory database as a domain in your config:
 
@@ -362,6 +329,7 @@ export default {
       name: 'memory',
       adapter: 'database',
       source: './memory.db',
+      options: { writable: true },  // Claude can write live context
     },
     {
       name: 'api',
@@ -377,7 +345,7 @@ Now Claude can query your context alongside your APIs:
 
 ```typescript
 // Who's on the team?
-await sdk.memory.queryPeople({ category: 'team' })
+await sdk.memory.queryPeople({ who: 'Alice' })
 
 // What does "SLA" mean?
 await sdk.memory.queryTerms({ term: 'SLA' })
@@ -471,8 +439,8 @@ User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.meth
 - **VM sandbox** via `vm.createContext` with no Node globals exposed
 - **Credentials injected** at execution time only, never visible in LLM context
 - **Read-only by default** — write operations require explicit `auth: { scope: 'readwrite' }`
-- **Database access** is always read-only — the file is opened with `readonly: true` and SQL is validated
-- **SQL validation** rejects all write statements and multi-statement queries
+- **Database access** is read-only by default — writable mode is opt-in via `options: { writable: true }`
+- **SQL validation** rejects all write statements and multi-statement queries in read-only mode
 
 ## CLI
 
@@ -486,9 +454,8 @@ npx codemode-x test
 # Start as MCP server (stdio transport)
 npx codemode-x start
 
-# Memory database management
-npx codemode-x memory init [db-path]
-npx codemode-x memory import <markdown-file> [db-path]
+# Memory database — use memory-x (https://github.com/codelitt/memory-x)
+memoryx init && memoryx import ./CLAUDE.md
 ```
 
 ## Development
@@ -511,7 +478,7 @@ npm run test:live
 - [Database Adapter](docs/database-adapter.md) — SQL validation, type mapping, table filtering
 - [Python Adapter](docs/python-adapter.md) — type mapping, subprocess execution, docstring parsing
 - [MCP Bridge Adapter](docs/mcp-bridge-adapter.md) — connecting existing MCP servers, JSON Schema mapping
-- [Memory Database](docs/memory-database.md) — schema, CLI commands, markdown import format
+- [Memory Database](docs/memory-database.md) — using [memory-x](https://github.com/codelitt/memory-x) with codemode-x
 
 ## License
 

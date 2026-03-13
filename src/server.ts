@@ -95,7 +95,8 @@ export class CmxServer {
         }
       } else if (domain.adapter === 'database') {
         // Database tools query SQLite directly
-        const querier = await buildDatabaseQuerier(String(domain.source));
+        const writable = domain.options?.writable === true;
+        const querier = await buildDatabaseQuerier(String(domain.source), writable);
         const tools = this.registry.getToolsByDomain(domain.name);
         for (const tool of tools) {
           const impl = querier.get(tool.name);

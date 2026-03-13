@@ -47,6 +47,7 @@ export interface AdapterOptions {
   domain?: string;
   auth?: AuthConfig;
   baseUrl?: string;
+  writable?: boolean;
 }
 
 export interface AuthConfig {

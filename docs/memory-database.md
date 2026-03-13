@@ -1,86 +1,33 @@
 # Memory Database
 
-Structured LLM memory backed by SQLite. Import context from CLAUDE.md-style markdown files and query it through the database adapter.
+Use [memory-x](https://github.com/codelitt/memory-x) to create structured SQLite databases from your markdown files, then query them through codemode-x's database adapter.
 
 ## Quick Start
 
 ```bash
-# Initialize a new memory database
-npx codemode-x memory init
+# Install memory-x
+npm install -g memory-x
 
-# Import from a markdown file
-npx codemode-x memory import ./CLAUDE.md
+# Create and populate a memory database from your markdown
+memoryx init
+memoryx import ./CLAUDE.md
 
-# Add to your codemode-x config to query it
+# Add to your codemode-x config
 ```
 
-## Schema
+## How It Works
 
-The memory database has five tables:
+memory-x dynamically creates tables from any markdown tables it finds — no hardcoded schemas. Section headings become table names, table headers become columns.
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `people` | name, role, notes, category | Team members, stakeholders, contacts |
-| `properties` | name, type, notes | Key assets, products, resources |
-| `entities` | name, description | Companies, projects, accounts |
-| `terms` | term, meaning | Domain-specific terminology |
-| `memories` | category, key, value, created_at | Generic key-value storage |
+codemode-x's database adapter then introspects the SQLite file and generates MCP tools automatically.
 
-## CLI Commands
-
-### `memory init [path]`
-
-Create a new memory database with the schema. Defaults to `./memory.db`.
-
-```bash
-npx codemode-x memory init
-npx codemode-x memory init ./data/memory.db
 ```
-
-### `memory import <markdown> [db-path]`
-
-Parse a markdown file and import tables into the database.
-
-```bash
-npx codemode-x memory import ./CLAUDE.md
-npx codemode-x memory import ./CLAUDE.md ./data/memory.db
-```
-
-## Markdown Import Format
-
-The importer detects table types from section headings:
-
-- **People**: sections containing "team", "direct report", "investor", or "external"
-- **Properties**: sections containing "portfolio", "propert", "asset", or "product"
-- **Entities**: sections containing "entit", "organization", or "company"
-- **Terms**: sections containing "term"
-- **Memories**: anything else goes to generic key-value storage
-
-### Example Markdown
-
-```markdown
-## Team
-| Who | Role |
-|-----|------|
-| Alice | Engineering Lead |
-| Bob | Designer |
-
-## Portfolio
-| Property | Notes |
-|----------|-------|
-| Auth Service | Core identity platform |
-| Payment Gateway | Stripe integration |
-
-## Terms
-| Term | Meaning |
-|------|---------|
-| SLA | Service Level Agreement |
-| RPO | Recovery Point Objective |
+[Your markdown files] → [memory-x] → [memory.db] → [codemode-x database adapter] → [MCP tools]
 ```
 
 ## Config Example
 
-After creating and importing, add the memory database as a domain:
+Point the database adapter at your memory database:
 
 ```js
 export default {
@@ -90,16 +37,25 @@ export default {
       name: 'memory',
       adapter: 'database',
       source: './memory.db',
+      options: { writable: true },  // allows Claude to write live context
     },
     // ... other domains
   ],
 };
 ```
 
-Then Claude can query your context:
+Then Claude can query your context through auto-generated tools:
 
 ```
-sdk.memory.queryPeople({ category: 'team' })
+sdk.memory.queryPeople({ who: 'Alice' })
 sdk.memory.queryTerms({ term: 'SLA' })
-sdk.memory.rawQuery({ sql: "SELECT * FROM people WHERE role LIKE '%Lead%'" })
+sdk.memory.rawQuery({ sql: "SELECT * FROM people WHERE _mx_section LIKE '%Investor%'" })
 ```
+
+## Writable Mode
+
+With `writable: true`, Claude can also insert/update/delete rows during conversations — useful for storing things it learns in real-time. memory-x tags imported rows with the source file path, while live writes get `_mx_source = 'live'`, so re-imports never overwrite what Claude learned.
+
+## More Info
+
+See the [memory-x README](https://github.com/codelitt/memory-x) for full documentation on importing, CLI commands, and configuration.

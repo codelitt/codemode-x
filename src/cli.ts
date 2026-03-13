@@ -26,9 +26,6 @@ async function main() {
     case 'test':
       await runTest();
       break;
-    case 'memory':
-      await runMemory();
-      break;
     default:
       printUsage();
   }
@@ -42,14 +39,15 @@ Commands:
   init     Interactive setup wizard
   start    Start the MCP server
   test     Test config by discovering and listing tools
-  memory   Manage memory database (init, import)
 
 Usage:
   npx codemode-x init
   npx codemode-x start [config-path]
   npx codemode-x test [config-path]
-  npx codemode-x memory init [db-path]
-  npx codemode-x memory import <markdown> [db-path]
+
+Memory database:
+  Use memory-x (npm install -g memory-x) to create and manage memory databases.
+  Then point codemode-x's database adapter at the .db file.
 `.trim());
 }
 
@@ -287,38 +285,6 @@ async function runTest() {
   }
 
   console.log(`\n✅ Config is valid. ${allTools.length} total tools ready.`);
-}
-
-// ─── Memory Database ─────────────────────────────────────────────
-
-async function runMemory() {
-  const subcommand = args[1];
-  const { initMemoryDb, importMarkdown } = await import('./memory.js');
-
-  switch (subcommand) {
-    case 'init': {
-      const dbPath = args[2] || './memory.db';
-      initMemoryDb(dbPath);
-      break;
-    }
-    case 'import': {
-      const mdPath = args[2];
-      if (!mdPath) {
-        console.error('Usage: codemode-x memory import <markdown-file> [db-path]');
-        process.exit(1);
-      }
-      const dbPath = args[3] || './memory.db';
-      importMarkdown(dbPath, mdPath);
-      break;
-    }
-    default:
-      console.log(`
-Memory database commands:
-
-  memory init [db-path]                Create a new memory database (default: ./memory.db)
-  memory import <markdown> [db-path]   Import markdown tables into the database
-`.trim());
-  }
 }
 
 main().catch(err => {

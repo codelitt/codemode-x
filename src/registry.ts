@@ -24,6 +24,7 @@ export class ToolRegistry {
       domain: domain.name,
       auth: domain.auth,
       baseUrl: domain.baseUrl,
+      writable: domain.options?.writable === true,
     };
 
     const defs = await adapter.parse(domain.source, opts);
