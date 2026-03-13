@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { resolve } from 'path';
 import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
+import { lambdaAdapter } from '../adapters/lambda.js';
 import { SearchIndex } from '../src/search.js';
 import { formatSearchResults } from '../src/typegen.js';
 import type { ToolDefinition } from '../src/types.js';
@@ -176,6 +177,97 @@ describe('Markdown Adapter', () => {
   it('handles directory glob patterns', async () => {
     const dirTools = await markdownAdapter.parse(FIXTURES, { domain: 'docs' });
     expect(dirTools.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Lambda Adapter ──────────────────────────────────────────────
+
+describe('Lambda Adapter (manifest mode)', () => {
+  let tools: ToolDefinition[];
+
+  beforeAll(async () => {
+    tools = await lambdaAdapter.parse(
+      resolve(FIXTURES, 'lambda-manifest.json'),
+      { domain: 'payments' }
+    );
+  });
+
+  it('discovers all functions from manifest', () => {
+    expect(tools.length).toBe(6);
+  });
+
+  it('generates camelCase tool names from Lambda function names', () => {
+    const names = tools.map(t => t.name).sort();
+    expect(names).toContain('processPayment');
+    expect(names).toContain('getTransaction');
+    expect(names).toContain('getUser');
+    expect(names).toContain('updateUser');
+    expect(names).toContain('listProducts');
+    expect(names).toContain('createOrder');
+  });
+
+  it('extracts input parameters with types', () => {
+    const processPayment = tools.find(t => t.name === 'processPayment')!;
+    expect(processPayment.parameters.length).toBe(3);
+
+    const amount = processPayment.parameters.find(p => p.name === 'amount')!;
+    expect(amount.type).toBe('number');
+    expect(amount.required).toBe(true);
+
+    const currency = processPayment.parameters.find(p => p.name === 'currency')!;
+    expect(currency.type).toBe('string');
+    expect(currency.required).toBe(false);
+  });
+
+  it('sets return types from manifest output field', () => {
+    const getTx = tools.find(t => t.name === 'getTransaction')!;
+    expect(getTx.returnType).toContain('transactionId');
+    expect(getTx.returnType).toContain('string');
+  });
+
+  it('marks readOnly correctly', () => {
+    expect(tools.find(t => t.name === 'getTransaction')!.readOnly).toBe(true);
+    expect(tools.find(t => t.name === 'processPayment')!.readOnly).toBe(false);
+    expect(tools.find(t => t.name === 'createOrder')!.readOnly).toBe(false);
+    expect(tools.find(t => t.name === 'listProducts')!.readOnly).toBe(true);
+  });
+
+  it('stores function name in route field', () => {
+    const processPayment = tools.find(t => t.name === 'processPayment')!;
+    expect(processPayment.route).toBe('myapp-payments-processPayment');
+  });
+
+  it('sets transport to lambda', () => {
+    for (const tool of tools) {
+      expect(tool.transport).toBe('lambda');
+      expect(tool.method).toBe('INVOKE');
+    }
+  });
+
+  it('sets domain on all tools', () => {
+    for (const tool of tools) {
+      expect(tool.domain).toBe('payments');
+    }
+  });
+
+  it('integrates with search index', () => {
+    const index = new SearchIndex();
+    index.index(tools);
+
+    const results = index.search('payment transaction');
+    expect(results.length).toBeGreaterThan(0);
+
+    const formatted = formatSearchResults('myapp', results);
+    expect(formatted).toContain('sdk');
+    expect(formatted).toContain('payments');
+    expect(formatted).toContain('processPayment');
+  });
+
+  it('handles complex parameter types', () => {
+    const createOrder = tools.find(t => t.name === 'createOrder')!;
+    const shipping = createOrder.parameters.find(p => p.name === 'shippingAddress')!;
+    expect(shipping.type).toContain('street');
+    expect(shipping.type).toContain('city');
   });
 });
 

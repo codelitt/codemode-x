@@ -1,0 +1,66 @@
+{
+  "region": "us-east-1",
+  "functions": [
+    {
+      "functionName": "myapp-payments-processPayment",
+      "description": "Process a credit card payment and return a transaction ID",
+      "input": {
+        "amount": { "type": "number", "required": true, "description": "Payment amount in cents" },
+        "currency": { "type": "string", "required": false, "description": "ISO 4217 currency code" },
+        "customerId": { "type": "string", "required": true, "description": "Customer identifier" }
+      },
+      "output": "{ transactionId: string; status: 'success' | 'pending' | 'failed' }",
+      "readOnly": false
+    },
+    {
+      "functionName": "myapp-payments-getTransaction",
+      "description": "Look up a transaction by ID",
+      "input": {
+        "transactionId": { "type": "string", "required": true }
+      },
+      "output": "{ transactionId: string; amount: number; status: string; createdAt: string }",
+      "readOnly": true
+    },
+    {
+      "functionName": "myapp-users-getUser",
+      "description": "Get user profile by ID",
+      "input": {
+        "userId": { "type": "string", "required": true }
+      },
+      "output": "{ id: string; name: string; email: string }",
+      "readOnly": true
+    },
+    {
+      "functionName": "myapp-users-updateUser",
+      "description": "Update user profile fields",
+      "input": {
+        "userId": { "type": "string", "required": true },
+        "name": { "type": "string", "required": false },
+        "email": { "type": "string", "required": false }
+      },
+      "output": "{ success: boolean }",
+      "readOnly": false
+    },
+    {
+      "functionName": "myapp-inventory-listProducts",
+      "description": "List all products with optional category filter",
+      "input": {
+        "category": { "type": "string", "required": false, "description": "Filter by category" },
+        "limit": { "type": "number", "required": false, "description": "Max results", "default": 50 }
+      },
+      "output": "{ id: string; name: string; price: number; category: string }[]",
+      "readOnly": true
+    },
+    {
+      "functionName": "myapp-inventory-createOrder",
+      "description": "Create a new order from a list of product IDs",
+      "input": {
+        "productIds": { "type": "string[]", "required": true },
+        "customerId": { "type": "string", "required": true },
+        "shippingAddress": { "type": "{ street: string; city: string; zip: string }", "required": true }
+      },
+      "output": "{ orderId: string; total: number; estimatedDelivery: string }",
+      "readOnly": false
+    }
+  ]
+}

@@ -230,6 +230,7 @@ async function runTest() {
   const { expressAdapter } = await import('../adapters/express.js');
   const { openapiAdapter } = await import('../adapters/openapi.js');
   const { markdownAdapter } = await import('../adapters/markdown.js');
+  const { lambdaAdapter } = await import('../adapters/lambda.js');
 
   const config = await loadConfig(configPath);
 
@@ -239,6 +240,7 @@ async function runTest() {
   registry.registerAdapter(expressAdapter);
   registry.registerAdapter(openapiAdapter);
   registry.registerAdapter(markdownAdapter);
+  registry.registerAdapter(lambdaAdapter);
 
   for (const domain of config.domains) {
     try {

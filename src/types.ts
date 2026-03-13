@@ -19,6 +19,7 @@ export interface ToolDefinition {
   readOnly: boolean;
   route?: string;         // Original route path for HTTP-based tools
   method?: string;        // HTTP method
+  transport?: 'http' | 'lambda'; // How to invoke this tool (default: http)
 }
 
 export interface ExecuteResult {
@@ -59,6 +60,7 @@ export interface DomainConfig {
   source: string;
   auth?: AuthConfig;
   baseUrl?: string;
+  options?: Record<string, unknown>; // Adapter-specific options
 }
 
 export interface CmxConfig {

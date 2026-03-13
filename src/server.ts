@@ -17,6 +17,7 @@ import { CredentialStore } from './auth.js';
 import { expressAdapter } from '../adapters/express.js';
 import { openapiAdapter } from '../adapters/openapi.js';
 import { markdownAdapter } from '../adapters/markdown.js';
+import { lambdaAdapter, buildLambdaInvoker } from '../adapters/lambda.js';
 
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -41,6 +42,7 @@ export class CmxServer {
     this.registry.registerAdapter(expressAdapter);
     this.registry.registerAdapter(openapiAdapter);
     this.registry.registerAdapter(markdownAdapter);
+    this.registry.registerAdapter(lambdaAdapter);
 
     this.server = new Server(
       { name: 'codemode-x', version: '0.1.0' },
@@ -71,6 +73,18 @@ export class CmxServer {
           this.implementations.set(
             `${domain.name}.${tool.name}`,
             buildHttpImplementation(tool, baseUrl)
+          );
+        }
+      } else if (domain.adapter === 'lambda') {
+        // Lambda tools invoke functions via AWS SDK
+        const tools = this.registry.getToolsByDomain(domain.name);
+        const region = String(domain.source);
+        for (const tool of tools) {
+          const fnName = tool.route!; // Function name stored in route field
+          const invoker = await buildLambdaInvoker(region, fnName);
+          this.implementations.set(
+            `${domain.name}.${tool.name}`,
+            invoker
           );
         }
       } else if (domain.adapter === 'markdown') {

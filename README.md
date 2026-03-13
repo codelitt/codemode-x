@@ -1,31 +1,30 @@
 # codemode-x
 
-Universal Code Mode Plugin for Claude Code. Compress any company's APIs, apps, and docs into **2 MCP tools** (~1,000 tokens) instead of N tools (100K+ tokens).
+MCP plugin for Claude Code. Takes your APIs, apps, and docs and compresses them into 2 MCP tools (~1,000 tokens) instead of N tools (100K+ tokens).
 
-Claude writes TypeScript code against a typed SDK; code runs in a sandbox.
+Claude writes TypeScript against a typed SDK. Code runs in a sandbox.
 
-Built by [Carbon](https://www.carbonrei.com/) and [Codelitt](https://www.codelitt.com/).
+Built by [Carbon](https://www.carbonresidential.com/) and [Codelitt](https://www.codelitt.com/).
 
-## How It Works
+## How it works
 
 ```
 cmx_search("properties rent data")           →  typed SDK signatures for matching tools
 cmx_execute("await sdk.rentComps.getProperties()")  →  real API call, sandboxed
 ```
 
-**Two tools. Any API.**
+Two tools:
 
-1. **`cmx_search(query)`** — discover available APIs/docs via FTS5 full-text search. Returns matching tool signatures + TS types for ONLY matched tools.
-2. **`cmx_execute(code)`** — run TypeScript code using `sdk.<domain>.<method>()`. AST-validated, sandboxed, credentials injected at runtime.
+1. `cmx_search(query)` -- find available APIs and docs via FTS5 full-text search. Returns matching tool signatures and TS types for only the matched tools.
+2. `cmx_execute(code)` -- run TypeScript using `sdk.<domain>.<method>()`. AST-validated, sandboxed, credentials injected at runtime.
 
-## Quick Start
+## Quick start
 
 ```bash
-# Install
 cd your-project
 npm install codemode-x
 
-# Create config pointing at your Express API
+# Create a config pointing at your Express API
 cat > codemode-x.config.ts << 'EOF'
 import { defineConfig } from 'codemode-x/src/types.js';
 
@@ -43,14 +42,14 @@ export default defineConfig({
 });
 EOF
 
-# Build & run as MCP server
+# Build and run as MCP server
 npm run build
 node plugin/start.mjs
 ```
 
-## Real-World Example: Rent Comps
+## Example: Carbon rent comps
 
-We built codemode-x to power our own rent comp analysis at Carbon. One config file turns an Express API into a typed SDK that Claude can search and call:
+We use this internally at Carbon for rent comp analysis. One config file turns an Express API into a typed SDK that Claude can search and call:
 
 ```typescript
 import { defineConfig } from 'codemode-x/src/types.js';
@@ -76,7 +75,6 @@ export default defineConfig({
 
 Then Claude can do things like:
 ```typescript
-// "Get all properties and calculate average rent across the portfolio"
 cmx_execute(`
   const props = await sdk.rentComps.getProperties();
   const comps = await sdk.rentComps.getComps({ propertyId: props[0].id });
@@ -92,33 +90,60 @@ cmx_execute(`
 | `express` | Express.js app file | Done |
 | `openapi` | OpenAPI 3.x spec (JSON) | Done |
 | `markdown` | Markdown docs | Done |
+| `lambda` | AWS Lambda functions | Done |
 | `python` | Python modules | Planned |
 | `mcp-bridge` | Existing MCP servers | Planned |
 | `database` | DB schema | Planned |
-| `lambda` | AWS Lambda functions | Planned |
+
+### Lambda functions
+
+The lambda adapter handles AWS Lambda at scale. Point it at a manifest file you control, or let it scan your account directly. We built it for a client with 1000+ functions.
+
+```javascript
+// Manifest mode -- you define the schemas
+export default {
+  sdkName: 'platform',
+  domains: [
+    { name: 'payments', adapter: 'lambda', source: './manifests/payments.json' },
+    { name: 'users', adapter: 'lambda', source: './manifests/users.json' },
+  ],
+};
+```
+
+```javascript
+// AWS discovery mode -- reads functions and tags from your account
+export default {
+  sdkName: 'platform',
+  domains: [
+    { name: 'api', adapter: 'lambda', source: 'us-east-1' },
+  ],
+};
+```
+
+Full guide: [docs/lambda-adapter.md](docs/lambda-adapter.md)
 
 ## Architecture
 
 ```
 User query → cmx_search → FTS5/BM25 index → typed SDK signatures (~500 tokens)
                                 ↓
-User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.method() → HTTP/subprocess
+User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.method() → HTTP / Lambda.invoke()
 ```
 
 ### Security
 
-- **AST validation**: blocks `require`, `import`, `fetch`, `process`, `eval`, `Function`
-- **VM sandbox**: Node.js `vm.createContext` with no Node globals
-- **Credentials**: never in LLM-visible types — injected at execution time only
-- **Read-only by default**: explicit opt-in for write operations
+- AST validation blocks `require`, `import`, `fetch`, `process`, `eval`, and `Function`
+- VM sandbox via `vm.createContext` with no Node globals exposed
+- Credentials are injected at execution time only, never visible in LLM context
+- Read-only by default; write operations require explicit opt-in
 
 ## CLI
 
 ```bash
-# Interactive setup — detects your Express/OpenAPI files and generates config
+# Interactive setup -- detects Express/OpenAPI files, generates config
 npx codemode-x init
 
-# Test your config — discovers tools and shows what Claude will see
+# Test config -- discovers tools and shows what Claude will see
 npx codemode-x test
 
 # Start as MCP server (stdio)
