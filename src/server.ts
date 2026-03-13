@@ -268,24 +268,37 @@ function buildHttpImplementation(
   };
 }
 
-/** Load config from a file path */
+/** Load config from a file path.
+ *  Supports .js, .mjs, and .json configs. For .ts, users need tsx or ts-node.
+ */
 export async function loadConfig(configPath?: string): Promise<CmxConfig> {
+  const projectDir = process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
   const searchPaths = configPath
     ? [resolve(configPath)]
     : [
-        resolve(process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), 'codemode-x.config.ts'),
-        resolve(process.env.CLAUDE_PROJECT_DIR ?? process.cwd(), 'codemode-x.config.js'),
-        resolve(process.cwd(), 'codemode-x.config.ts'),
+        resolve(projectDir, 'codemode-x.config.js'),
+        resolve(projectDir, 'codemode-x.config.mjs'),
+        resolve(projectDir, 'codemode-x.config.json'),
         resolve(process.cwd(), 'codemode-x.config.js'),
+        resolve(process.cwd(), 'codemode-x.config.mjs'),
+        resolve(process.cwd(), 'codemode-x.config.json'),
       ];
 
-  for (const p of searchPaths) {
+  for (const p of [...new Set(searchPaths)]) {
     if (existsSync(p)) {
-      // For .ts files, we'll need tsx or ts-node. For now support .js/.mjs
-      const mod = await import(p);
+      if (p.endsWith('.json')) {
+        const raw = (await import('fs')).readFileSync(p, 'utf-8');
+        return JSON.parse(raw) as CmxConfig;
+      }
+      // Use file:// URL for cross-platform import compatibility
+      const fileUrl = new URL(`file://${p}`);
+      const mod = await import(fileUrl.href);
       return mod.default ?? mod;
     }
   }
 
-  throw new Error(`No codemode-x config found. Searched:\n${searchPaths.join('\n')}`);
+  throw new Error(
+    `No codemode-x config found. Create one with: npx codemode-x init\n` +
+    `Searched:\n  ${[...new Set(searchPaths)].join('\n  ')}`
+  );
 }

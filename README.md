@@ -112,12 +112,34 @@ User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.meth
 - **Credentials**: never in LLM-visible types — injected at execution time only
 - **Read-only by default**: explicit opt-in for write operations
 
+## CLI
+
+```bash
+# Interactive setup — detects your Express/OpenAPI files and generates config
+npx codemode-x init
+
+# Test your config — discovers tools and shows what Claude will see
+npx codemode-x test
+
+# Start as MCP server (stdio)
+npx codemode-x start
+```
+
+### Adding to Claude Code
+
+```bash
+claude mcp add codemode-x -- node /path/to/codemode-x/plugin/start.mjs
+```
+
 ## Development
 
 ```bash
 npm install
 npm run build
 npm test
+
+# Test against a live server (start your API first)
+npm run test:live
 ```
 
 ## License

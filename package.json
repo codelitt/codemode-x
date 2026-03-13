@@ -5,14 +5,21 @@
   "type": "module",
   "main": "dist/server.js",
   "bin": {
-    "codemode-x": "dist/cli.js"
+    "codemode-x": "dist/src/cli.js"
   },
+  "files": [
+    "dist",
+    "plugin",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/plugin/start.mjs",
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run",
-    "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest"
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/vitest",
+    "test:live": "node --import tsx tests/live-e2e.ts",
+    "cmx": "node dist/src/cli.js"
   },
   "keywords": ["claude-code", "mcp", "plugin", "sdk", "api"],
   "license": "MIT",

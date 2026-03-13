@@ -5,17 +5,16 @@
  * Loads the config, initializes adapters, and starts the MCP server on stdio.
  */
 
-import { resolve, dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Try to import the compiled server
 async function main() {
   try {
-    const { CmxServer, loadConfig } = await import('../dist/src/server.js');
+    const { CmxServer, loadConfig } = await import(resolve(__dirname, '../dist/src/server.js'));
 
+    // Config path: CLI arg, or auto-detect from CLAUDE_PROJECT_DIR / cwd
     const configPath = process.argv[2] || undefined;
     const config = await loadConfig(configPath);
 
@@ -23,7 +22,13 @@ async function main() {
     await server.start();
   } catch (err) {
     console.error('[cmx] Failed to start:', err.message);
-    console.error('[cmx] Make sure to run `npm run build` first');
+
+    if (err.message.includes('No codemode-x config found')) {
+      console.error('[cmx] Run `npx codemode-x init` in your project directory to create a config.');
+    } else {
+      console.error('[cmx] Make sure to run `npm run build` first.');
+    }
+
     process.exit(1);
   }
 }
