@@ -20,9 +20,9 @@ The memory database has five tables:
 
 | Table | Columns | Purpose |
 |-------|---------|---------|
-| `people` | name, role, notes, category | Team members, investors, contacts |
-| `properties` | name, type, notes | Real estate portfolio |
-| `entities` | name, description | Companies, funds, loans |
+| `people` | name, role, notes, category | Team members, stakeholders, contacts |
+| `properties` | name, type, notes | Key assets, products, resources |
+| `entities` | name, description | Companies, projects, accounts |
 | `terms` | term, meaning | Domain-specific terminology |
 | `memories` | category, key, value, created_at | Generic key-value storage |
 
@@ -51,8 +51,8 @@ npx codemode-x memory import ./CLAUDE.md ./data/memory.db
 The importer detects table types from section headings:
 
 - **People**: sections containing "team", "direct report", "investor", or "external"
-- **Properties**: sections containing "portfolio" or "propert"
-- **Entities**: sections containing "entit"
+- **Properties**: sections containing "portfolio", "propert", "asset", or "product"
+- **Entities**: sections containing "entit", "organization", or "company"
 - **Terms**: sections containing "term"
 - **Memories**: anything else goes to generic key-value storage
 
@@ -68,12 +68,14 @@ The importer detects table types from section headings:
 ## Portfolio
 | Property | Notes |
 |----------|-------|
-| Sunset Apartments | 48 units, renovated 2024 |
+| Auth Service | Core identity platform |
+| Payment Gateway | Stripe integration |
 
 ## Terms
 | Term | Meaning |
 |------|---------|
-| NOI | Net Operating Income |
+| SLA | Service Level Agreement |
+| RPO | Recovery Point Objective |
 ```
 
 ## Config Example
@@ -82,7 +84,7 @@ After creating and importing, add the memory database as a domain:
 
 ```js
 export default {
-  sdkName: 'carbon',
+  sdkName: 'myapp',
   domains: [
     {
       name: 'memory',
@@ -98,6 +100,6 @@ Then Claude can query your context:
 
 ```
 sdk.memory.queryPeople({ category: 'team' })
-sdk.memory.queryTerms({ term: 'NOI' })
-sdk.memory.rawQuery({ sql: 'SELECT * FROM properties WHERE notes LIKE "%renovated%"' })
+sdk.memory.queryTerms({ term: 'SLA' })
+sdk.memory.rawQuery({ sql: "SELECT * FROM people WHERE role LIKE '%Lead%'" })
 ```

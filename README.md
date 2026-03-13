@@ -9,8 +9,8 @@ Built by [Carbon](https://www.carbonresidential.com/) and [Codelitt](https://www
 ## How it works
 
 ```
-cmx_search("properties rent data")                          →  typed SDK signatures for matching tools
-cmx_execute("await sdk.rentComps.getProperties()")           →  real API call, sandboxed
+cmx_search("users orders")                                     →  typed SDK signatures for matching tools
+cmx_execute("await sdk.api.getUsers()")                         →  real API call, sandboxed
 cmx_execute("await sdk.data.rawQuery({ sql: 'SELECT ...' })")  →  database query, read-only
 ```
 
@@ -221,7 +221,7 @@ Full guide: [docs/database-adapter.md](docs/database-adapter.md)
 
 ## Memory database
 
-codemode-x includes a built-in memory system that converts CLAUDE.md-style markdown into a queryable SQLite database. This gives Claude structured access to your project context — team members, properties, terminology, etc.
+codemode-x includes a built-in memory system that converts markdown into a queryable SQLite database. This gives Claude structured access to your project context — team members, key entities, terminology, and anything else you track in markdown tables.
 
 ### Setup
 
@@ -239,40 +239,36 @@ npx codemode-x memory import ./CLAUDE.md ./data/memory.db
 
 ### Schema
 
-The memory database has 5 tables:
+The memory database has 5 tables designed to capture common project context:
 
-| Table | Purpose | Example data |
-|-------|---------|-------------|
-| `people` | Team, investors, contacts | name, role, notes, category |
-| `properties` | Portfolio / assets | name, type, notes |
-| `entities` | Companies, funds, loans | name, description |
-| `terms` | Domain terminology | term, meaning |
-| `memories` | Generic key-value storage | category, key, value |
+| Table | Purpose | Example use cases |
+|-------|---------|-------------------|
+| `people` | Team members, stakeholders, contacts | Engineering team, clients, vendors |
+| `properties` | Key assets or resources | Products, services, infrastructure, real estate |
+| `entities` | Organizations, accounts, projects | Companies, funds, partner orgs |
+| `terms` | Domain-specific terminology | Acronyms, jargon, business terms |
+| `memories` | Generic key-value storage | Anything that doesn't fit the above |
 
 ### How import works
 
 The importer reads markdown tables and routes them to the right database table based on section headings:
 
 ```markdown
-## People — Direct Reports & Team
+## Team
 | Who | Role |
 |-----|------|
 | Alice | Engineering Lead |     → people table (category: 'team')
 
-## People — Investors & External
+## External Partners
 | Who | Role |
 |-----|------|
-| Bob | Lead Investor |          → people table (category: 'investor')
-
-## Portfolio — Properties
-| Property | Notes |
-|----------|-------|
-| Sunset Apartments | 48 units | → properties table
+| Bob | Design Agency Lead |     → people table (category: 'investor')
 
 ## Terms
 | Term | Meaning |
 |------|---------|
-| NOI | Net Operating Income |    → terms table
+| SLA | Service Level Agreement | → terms table
+| RPO | Recovery Point Objective | → terms table
 ```
 
 ### Using it with the database adapter
@@ -281,7 +277,7 @@ Add the memory database as a domain in your config:
 
 ```js
 export default {
-  sdkName: 'carbon',
+  sdkName: 'myapp',
   domains: [
     {
       name: 'memory',
@@ -292,7 +288,7 @@ export default {
       name: 'api',
       adapter: 'express',
       source: './server.js',
-      baseUrl: 'http://localhost:3001',
+      baseUrl: 'http://localhost:3000',
     },
   ],
 };
@@ -304,14 +300,14 @@ Now Claude can query your context alongside your APIs:
 // Who's on the team?
 await sdk.memory.queryPeople({ category: 'team' })
 
-// What does "NOI" mean?
-await sdk.memory.queryTerms({ term: 'NOI' })
+// What does "SLA" mean?
+await sdk.memory.queryTerms({ term: 'SLA' })
 
-// Find properties with specific characteristics
-await sdk.memory.rawQuery({ sql: "SELECT * FROM properties WHERE notes LIKE '%renovated%'" })
+// Free-form search
+await sdk.memory.rawQuery({ sql: "SELECT * FROM people WHERE role LIKE '%Lead%'" })
 
 // And still call your APIs
-await sdk.api.getProperties()
+await sdk.api.getUsers()
 ```
 
 Full guide: [docs/memory-database.md](docs/memory-database.md)
@@ -322,14 +318,14 @@ The real power is combining multiple adapters in one config. Claude searches acr
 
 ```js
 export default {
-  sdkName: 'carbon',
+  sdkName: 'myapp',
   domains: [
     // REST API
     {
-      name: 'rentComps',
+      name: 'api',
       adapter: 'express',
       source: './server.js',
-      baseUrl: 'http://localhost:3001',
+      baseUrl: 'http://localhost:3000',
       auth: { scope: 'readwrite' },
     },
     // Serverless functions
@@ -360,7 +356,25 @@ export default {
 };
 ```
 
-A search for "rent data" might return results from the API (endpoints), the database (tables), and the docs (relevant sections) — all typed, all callable through the same `sdk.*` interface.
+A search for "users" might return results from the API (endpoints), the database (tables), and the docs (relevant sections) — all typed, all callable through the same `sdk.*` interface.
+
+### Real-world example: Carbon
+
+We use this internally at [Carbon](https://www.carbonresidential.com/) for real estate operations. One config connects a rent comps API, property database, investor context, and operational docs:
+
+```js
+export default {
+  sdkName: 'carbon',
+  domains: [
+    { name: 'rentComps', adapter: 'express', source: './server.js', baseUrl: 'http://localhost:3001' },
+    { name: 'portfolio', adapter: 'database', source: './properties.db' },
+    { name: 'memory', adapter: 'database', source: './memory.db' },
+    { name: 'docs', adapter: 'markdown', source: './docs/**/*.md' },
+  ],
+};
+```
+
+Claude can search across all domains — "rent comps for Lakeside" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
 
 ## Architecture
 
