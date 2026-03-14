@@ -421,7 +421,7 @@ export default {
 };
 ```
 
-Claude can search across all domains — "rent comps for Lakeside" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
+Claude can search across all domains — "rent comps for Maple Ridge" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
 
 ## Architecture
 
