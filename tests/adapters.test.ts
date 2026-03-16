@@ -8,6 +8,14 @@ import { markdownAdapter } from '../adapters/markdown.js';
 import { lambdaAdapter } from '../adapters/lambda.js';
 import { databaseAdapter, validateReadOnlySQL, buildDatabaseQuerier } from '../adapters/database.js';
 import { pythonAdapter, buildPythonInvoker } from '../adapters/python.js';
+import {
+  mcpBridgeAdapter,
+  buildMcpBridgeInvoker,
+  parseServerConfig,
+  extractParameters,
+  mapJsonSchemaType,
+  inferReadOnly,
+} from '../adapters/mcp-bridge.js';
 import { SearchIndex } from '../src/search.js';
 import { formatSearchResults } from '../src/typegen.js';
 import type { ToolDefinition } from '../src/types.js';
@@ -697,5 +705,229 @@ describe('Python Invoker', () => {
     const invoker = buildPythonInvoker(fixturePath, `${fixturePath}::calculate_total`);
     const result = await invoker({ prices: [10, 20, 30], tax_rate: 0.1 });
     expect(result).toBeCloseTo(66.0);
+  });
+});
+
+// ─── MCP Bridge Adapter — Helper Unit Tests ─────────────────────
+
+describe('MCP Bridge — parseServerConfig', () => {
+  it('parses a simple command string', () => {
+    const config = parseServerConfig('node my-server.js');
+    expect(config.command).toBe('node');
+    expect(config.args).toEqual(['my-server.js']);
+  });
+
+  it('parses a command string with multiple args', () => {
+    const config = parseServerConfig('python -m my_server --port 3000');
+    expect(config.command).toBe('python');
+    expect(config.args).toEqual(['-m', 'my_server', '--port', '3000']);
+  });
+
+  it('parses an object config with command and args', () => {
+    const config = parseServerConfig({ command: 'node', args: ['server.js'], env: { PORT: '8080' } });
+    expect(config.command).toBe('node');
+    expect(config.args).toEqual(['server.js']);
+    expect(config.env).toEqual({ PORT: '8080' });
+  });
+
+  it('defaults args to empty array for object config', () => {
+    const config = parseServerConfig({ command: 'node' });
+    expect(config.args).toEqual([]);
+  });
+
+  it('throws for object without command field', () => {
+    expect(() => parseServerConfig({ args: ['foo'] })).toThrow('must have a "command" field');
+  });
+
+  it('throws for null', () => {
+    expect(() => parseServerConfig(null)).toThrow('must be a command string');
+  });
+
+  it('throws for number', () => {
+    expect(() => parseServerConfig(42)).toThrow('must be a command string');
+  });
+});
+
+describe('MCP Bridge — extractParameters', () => {
+  it('returns empty array for undefined schema', () => {
+    expect(extractParameters(undefined)).toEqual([]);
+  });
+
+  it('returns empty array for schema without properties', () => {
+    expect(extractParameters({ type: 'object' })).toEqual([]);
+  });
+
+  it('extracts properties with required flags', () => {
+    const params = extractParameters({
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'User name' },
+        age: { type: 'integer' },
+      },
+      required: ['name'],
+    });
+    expect(params.length).toBe(2);
+
+    const name = params.find(p => p.name === 'name')!;
+    expect(name.type).toBe('string');
+    expect(name.required).toBe(true);
+    expect(name.description).toBe('User name');
+
+    const age = params.find(p => p.name === 'age')!;
+    expect(age.type).toBe('number');
+    expect(age.required).toBe(false);
+  });
+
+  it('handles nested object and array types', () => {
+    const params = extractParameters({
+      type: 'object',
+      properties: {
+        tags: { type: 'array', items: { type: 'string' } },
+        address: { type: 'object', properties: { city: { type: 'string' } } },
+      },
+    });
+    const tags = params.find(p => p.name === 'tags')!;
+    expect(tags.type).toBe('string[]');
+
+    const address = params.find(p => p.name === 'address')!;
+    expect(address.type).toContain('city');
+  });
+});
+
+describe('MCP Bridge — mapJsonSchemaType', () => {
+  it('maps string', () => expect(mapJsonSchemaType({ type: 'string' })).toBe('string'));
+  it('maps number', () => expect(mapJsonSchemaType({ type: 'number' })).toBe('number'));
+  it('maps integer to number', () => expect(mapJsonSchemaType({ type: 'integer' })).toBe('number'));
+  it('maps boolean', () => expect(mapJsonSchemaType({ type: 'boolean' })).toBe('boolean'));
+  it('maps null', () => expect(mapJsonSchemaType({ type: 'null' })).toBe('null'));
+  it('maps array of strings', () => expect(mapJsonSchemaType({ type: 'array', items: { type: 'string' } })).toBe('string[]'));
+  it('maps array without items', () => expect(mapJsonSchemaType({ type: 'array' })).toBe('unknown[]'));
+  it('maps object with properties', () => {
+    const result = mapJsonSchemaType({ type: 'object', properties: { x: { type: 'number' } } });
+    expect(result).toBe('{ x: number }');
+  });
+  it('maps object without properties', () => expect(mapJsonSchemaType({ type: 'object' })).toBe('Record<string, unknown>'));
+  it('returns unknown for missing schema', () => expect(mapJsonSchemaType(null)).toBe('unknown'));
+  it('returns unknown for missing type', () => expect(mapJsonSchemaType({})).toBe('unknown'));
+  it('returns unknown for unrecognized type', () => expect(mapJsonSchemaType({ type: 'custom' })).toBe('unknown'));
+});
+
+describe('MCP Bridge — inferReadOnly', () => {
+  it('returns true for read-like names', () => {
+    expect(inferReadOnly('get_users')).toBe(true);
+    expect(inferReadOnly('listItems')).toBe(true);
+    expect(inferReadOnly('search_orders')).toBe(true);
+    expect(inferReadOnly('fetch_data')).toBe(true);
+  });
+
+  it('returns false for write-like names', () => {
+    expect(inferReadOnly('create_user')).toBe(false);
+    expect(inferReadOnly('updateItem')).toBe(false);
+    expect(inferReadOnly('delete_order')).toBe(false);
+    expect(inferReadOnly('sendEmail')).toBe(false);
+    expect(inferReadOnly('post_message')).toBe(false);
+    expect(inferReadOnly('insertRecord')).toBe(false);
+  });
+});
+
+// ─── MCP Bridge Adapter — Integration Tests ─────────────────────
+
+const MCP_ECHO_SERVER = resolve(FIXTURES, 'mcp-echo-server.js');
+
+describe('MCP Bridge — parse() integration', () => {
+  let tools: ToolDefinition[];
+
+  beforeAll(async () => {
+    tools = await mcpBridgeAdapter.parse(
+      `node ${MCP_ECHO_SERVER}`,
+      { domain: 'echo' },
+    );
+  }, 15000);
+
+  it('discovers all tools from the echo server', () => {
+    expect(tools.length).toBe(3);
+    const names = tools.map(t => t.name).sort();
+    expect(names).toEqual(['add_numbers', 'create_item', 'get_echo']);
+  });
+
+  it('extracts parameters correctly', () => {
+    const echo = tools.find(t => t.name === 'get_echo')!;
+    expect(echo.parameters.length).toBe(1);
+    expect(echo.parameters[0].name).toBe('message');
+    expect(echo.parameters[0].type).toBe('string');
+
+    const add = tools.find(t => t.name === 'add_numbers')!;
+    expect(add.parameters.length).toBe(2);
+  });
+
+  it('infers readOnly correctly', () => {
+    expect(tools.find(t => t.name === 'get_echo')!.readOnly).toBe(true);
+    expect(tools.find(t => t.name === 'add_numbers')!.readOnly).toBe(true);
+    expect(tools.find(t => t.name === 'create_item')!.readOnly).toBe(false);
+  });
+
+  it('sets domain and transport', () => {
+    for (const tool of tools) {
+      expect(tool.domain).toBe('echo');
+      expect(tool.transport).toBe('mcp');
+    }
+  });
+
+  it('applies include filter', async () => {
+    const filtered = await mcpBridgeAdapter.parse(
+      `node ${MCP_ECHO_SERVER}`,
+      { domain: 'echo', tools: ['get_echo'] } as any,
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].name).toBe('get_echo');
+  }, 15000);
+
+  it('applies exclude filter', async () => {
+    const filtered = await mcpBridgeAdapter.parse(
+      `node ${MCP_ECHO_SERVER}`,
+      { domain: 'echo', exclude: ['create_item'] } as any,
+    );
+    const names = filtered.map(t => t.name);
+    expect(names).not.toContain('create_item');
+    expect(names).toContain('get_echo');
+  }, 15000);
+});
+
+describe('MCP Bridge — buildMcpBridgeInvoker() integration', () => {
+  let implementations: Map<string, (args: Record<string, unknown>) => Promise<unknown>>;
+  let close: () => Promise<void>;
+
+  beforeAll(async () => {
+    const result = await buildMcpBridgeInvoker(`node ${MCP_ECHO_SERVER}`);
+    implementations = result.implementations;
+    close = result.close;
+  }, 15000);
+
+  afterAll(async () => {
+    await close();
+  });
+
+  it('discovers all tool implementations', () => {
+    expect(implementations.size).toBe(3);
+    expect(implementations.has('get_echo')).toBe(true);
+    expect(implementations.has('add_numbers')).toBe(true);
+    expect(implementations.has('create_item')).toBe(true);
+  });
+
+  it('calls get_echo and returns parsed result', async () => {
+    const result = await implementations.get('get_echo')!({ message: 'hello' }) as any;
+    expect(result.echoed).toBe('hello');
+  });
+
+  it('calls add_numbers and returns correct sum', async () => {
+    const result = await implementations.get('add_numbers')!({ a: 3, b: 7 }) as any;
+    expect(result.result).toBe(10);
+  });
+
+  it('calls create_item with optional param', async () => {
+    const result = await implementations.get('create_item')!({ name: 'Widget', category: 'tools' }) as any;
+    expect(result.name).toBe('Widget');
+    expect(result.category).toBe('tools');
+    expect(result.id).toBe('123');
   });
 });

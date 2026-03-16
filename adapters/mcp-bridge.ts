@@ -63,7 +63,7 @@ interface McpServerConfig {
   env?: Record<string, string>;
 }
 
-function parseServerConfig(source: unknown): McpServerConfig {
+export function parseServerConfig(source: unknown): McpServerConfig {
   if (typeof source === 'string') {
     // Simple command string: "node my-server.js" or "python -m my_server"
     const parts = source.split(/\s+/);
@@ -187,7 +187,7 @@ export async function buildMcpBridgeInvoker(
 /**
  * Extract ParameterDef[] from an MCP tool's JSON Schema inputSchema.
  */
-function extractParameters(inputSchema?: Record<string, unknown>): ParameterDef[] {
+export function extractParameters(inputSchema?: Record<string, unknown>): ParameterDef[] {
   if (!inputSchema) return [];
 
   const properties = (inputSchema.properties ?? {}) as Record<string, any>;
@@ -203,7 +203,7 @@ function extractParameters(inputSchema?: Record<string, unknown>): ParameterDef[
 }
 
 /** Map JSON Schema types to TypeScript type strings */
-function mapJsonSchemaType(schema: any): string {
+export function mapJsonSchemaType(schema: any): string {
   if (!schema || !schema.type) return 'unknown';
 
   const typeMap: Record<string, string> = {
@@ -235,7 +235,7 @@ function mapJsonSchemaType(schema: any): string {
 }
 
 /** Infer read-only from tool name */
-function inferReadOnly(name: string): boolean {
+export function inferReadOnly(name: string): boolean {
   const lower = name.toLowerCase();
   const writePatterns = ['create', 'update', 'delete', 'write', 'send', 'post', 'put', 'save', 'remove', 'insert', 'modify', 'set'];
   for (const p of writePatterns) {
