@@ -39,6 +39,8 @@ export default {
       source: './server.js',
       baseUrl: 'http://localhost:3000',
       auth: { scope: 'readwrite' },
+      // Or use header-based auth with an env var:
+      // auth: { type: 'header', key: 'X-API-Key', envVar: 'MY_API_KEY' },
     },
   ],
 };
@@ -438,6 +440,7 @@ User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.meth
 - **AST validation** blocks `require`, `import`, `fetch`, `process`, `eval`, and `Function`
 - **VM sandbox** via `vm.createContext` with no Node globals exposed
 - **Credentials injected** at execution time only, never visible in LLM context
+- **Header auth** — use `auth: { type: 'header', key: 'X-API-Key', envVar: 'MY_API_KEY' }` to inject auth headers from environment variables at request time
 - **Read-only by default** — write operations require explicit `auth: { scope: 'readwrite' }`
 - **Database access** is read-only by default — writable mode is opt-in via `options: { writable: true }`
 - **SQL validation** rejects all write statements and multi-statement queries in read-only mode

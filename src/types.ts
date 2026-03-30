@@ -45,7 +45,7 @@ export interface Adapter {
 
 export interface AdapterOptions {
   domain?: string;
-  auth?: AuthConfig;
+  auth?: AuthConfig | HeaderAuthConfig;
   baseUrl?: string;
   writable?: boolean;
 }
@@ -55,11 +55,18 @@ export interface AuthConfig {
   scope: 'read' | 'readwrite';
 }
 
+/** Simple header-based auth config for HTTP APIs */
+export interface HeaderAuthConfig {
+  type: 'header';
+  key: string;      // Header name, e.g. 'X-API-Key'
+  envVar: string;   // Environment variable name, e.g. 'MY_API_KEY'
+}
+
 export interface DomainConfig {
   name: string;
   adapter: string;
   source: string;
-  auth?: AuthConfig;
+  auth?: AuthConfig | HeaderAuthConfig;
   baseUrl?: string;
   options?: Record<string, unknown>; // Adapter-specific options
 }
@@ -77,6 +84,16 @@ export interface SearchResult {
   tool: ToolDefinition;
   score: number;
   typeSnippet: string; // Generated TS types for just this tool
+}
+
+/** Type guard for scope-based auth config (has provider/scope fields) */
+export function isScopeAuth(auth?: AuthConfig | HeaderAuthConfig): auth is AuthConfig {
+  return !!auth && !('type' in auth);
+}
+
+/** Type guard for header-based auth config */
+export function isHeaderAuth(auth?: AuthConfig | HeaderAuthConfig): auth is HeaderAuthConfig {
+  return !!auth && 'type' in auth && (auth as HeaderAuthConfig).type === 'header';
 }
 
 /** Helper to define a config with type checking */

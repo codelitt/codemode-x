@@ -187,6 +187,31 @@ describe('Markdown Adapter', () => {
     expect(results[0].tool.description).toContain('Rent Analysis');
   });
 
+  it('search finds terms in section body content, not just headings', () => {
+    const index = new SearchIndex();
+    index.index(tools);
+
+    // "listing sources" appears only in the Data Collection body, not in any heading
+    const results = index.search('listing sources');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].tool.description).toContain('Data Collection');
+  });
+
+  it('search finds body-only terms across different sections', () => {
+    const index = new SearchIndex();
+    index.index(tools);
+
+    // "vacancy" appears only in the Rent Analysis body
+    const results = index.search('vacancy');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].tool.description).toContain('Rent Analysis');
+
+    // "occupancy rates" appears only in the Market Reports body
+    const ratesResults = index.search('occupancy rates');
+    expect(ratesResults.length).toBeGreaterThan(0);
+    expect(ratesResults[0].tool.description).toContain('Market Reports');
+  });
+
   it('handles directory glob patterns', async () => {
     const dirTools = await markdownAdapter.parse(FIXTURES, { domain: 'docs' });
     expect(dirTools.length).toBeGreaterThan(0);

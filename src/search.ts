@@ -24,31 +24,32 @@ export class SearchIndex {
         route TEXT,
         method TEXT,
         read_only INTEGER NOT NULL DEFAULT 1,
-        definition TEXT NOT NULL
+        definition TEXT NOT NULL,
+        body TEXT NOT NULL DEFAULT ''
       );
 
       CREATE VIRTUAL TABLE IF NOT EXISTS tools_fts USING fts5(
-        key, name, domain, description, params, route, method,
+        key, name, domain, description, params, route, method, body,
         content=tools,
         content_rowid=rowid,
         tokenize='porter unicode61'
       );
 
       CREATE TRIGGER IF NOT EXISTS tools_ai AFTER INSERT ON tools BEGIN
-        INSERT INTO tools_fts(rowid, key, name, domain, description, params, route, method)
-        VALUES (new.rowid, new.key, new.name, new.domain, new.description, new.params, new.route, new.method);
+        INSERT INTO tools_fts(rowid, key, name, domain, description, params, route, method, body)
+        VALUES (new.rowid, new.key, new.name, new.domain, new.description, new.params, new.route, new.method, new.body);
       END;
 
       CREATE TRIGGER IF NOT EXISTS tools_ad AFTER DELETE ON tools BEGIN
-        INSERT INTO tools_fts(tools_fts, rowid, key, name, domain, description, params, route, method)
-        VALUES ('delete', old.rowid, old.key, old.name, old.domain, old.description, old.params, old.route, old.method);
+        INSERT INTO tools_fts(tools_fts, rowid, key, name, domain, description, params, route, method, body)
+        VALUES ('delete', old.rowid, old.key, old.name, old.domain, old.description, old.params, old.route, old.method, old.body);
       END;
 
       CREATE TRIGGER IF NOT EXISTS tools_au AFTER UPDATE ON tools BEGIN
-        INSERT INTO tools_fts(tools_fts, rowid, key, name, domain, description, params, route, method)
-        VALUES ('delete', old.rowid, old.key, old.name, old.domain, old.description, old.params, old.route, old.method);
-        INSERT INTO tools_fts(rowid, key, name, domain, description, params, route, method)
-        VALUES (new.rowid, new.key, new.name, new.domain, new.description, new.params, new.route, new.method);
+        INSERT INTO tools_fts(tools_fts, rowid, key, name, domain, description, params, route, method, body)
+        VALUES ('delete', old.rowid, old.key, old.name, old.domain, old.description, old.params, old.route, old.method, old.body);
+        INSERT INTO tools_fts(rowid, key, name, domain, description, params, route, method, body)
+        VALUES (new.rowid, new.key, new.name, new.domain, new.description, new.params, new.route, new.method, new.body);
       END;
     `);
   }
@@ -56,18 +57,19 @@ export class SearchIndex {
   /** Index a set of tool definitions */
   index(tools: ToolDefinition[]): void {
     const upsert = this.db.prepare(`
-      INSERT OR REPLACE INTO tools (key, name, domain, description, params, return_type, route, method, read_only, definition)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO tools (key, name, domain, description, params, return_type, route, method, read_only, definition, body)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const tx = this.db.transaction((defs: ToolDefinition[]) => {
       for (const t of defs) {
         const key = `${t.domain}.${t.name}`;
         const paramStr = t.parameters.map(p => `${p.name}: ${p.type}`).join(', ');
+        const body = t.examples?.[0] ?? '';
         upsert.run(
           key, t.name, t.domain, t.description,
           paramStr, t.returnType, t.route ?? null, t.method ?? null,
-          t.readOnly ? 1 : 0, JSON.stringify(t)
+          t.readOnly ? 1 : 0, JSON.stringify(t), body
         );
       }
     });

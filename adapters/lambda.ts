@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import type { Adapter, ToolDefinition, AdapterOptions, ParameterDef } from '../src/types.js';
+import { isScopeAuth, type Adapter, type ToolDefinition, type AdapterOptions, type ParameterDef } from '../src/types.js';
 
 /**
  * AWS Lambda adapter — discovers Lambda functions and converts them to
@@ -103,7 +103,7 @@ function manifestFnToTool(
     route: fn.functionName,          // Store the actual function name/ARN
     method: 'INVOKE',
     transport: 'lambda',
-    auth: opts?.auth?.provider,
+    auth: isScopeAuth(opts?.auth) ? opts.auth.provider : undefined,
   };
 }
 
@@ -233,7 +233,7 @@ function awsFnToTool(
     route: fnName,
     method: 'INVOKE',
     transport: 'lambda',
-    auth: opts?.auth?.provider,
+    auth: isScopeAuth(opts?.auth) ? opts.auth.provider : undefined,
   };
 }
 

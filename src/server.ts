@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { resolve, dirname } from 'path';
 import { existsSync } from 'fs';
 
-import type { CmxConfig, ToolDefinition } from './types.js';
+import type { CmxConfig, ToolDefinition, HeaderAuthConfig } from './types.js';
 import { ToolRegistry } from './registry.js';
 import { SearchIndex } from './search.js';
 import { formatSearchResults } from './typegen.js';
@@ -47,7 +47,7 @@ export class CmxServer {
     this.registry.registerAdapter(pythonAdapter);
     this.registry.registerAdapter(mcpBridgeAdapter);
 
-    this.server = new McpServer({ name: 'codemode-x', version: '0.1.0' });
+    this.server = new McpServer({ name: 'codemode-x', version: '0.3.0' });
   }
 
   /** Load all domains from config and build the search index */
@@ -70,10 +70,13 @@ export class CmxServer {
       if (domain.adapter === 'express' || domain.adapter === 'openapi') {
         const tools = this.registry.getToolsByDomain(domain.name);
         const baseUrl = domain.baseUrl ?? 'http://localhost:3001';
+        const headerAuth = domain.auth && 'type' in domain.auth && domain.auth.type === 'header'
+          ? domain.auth as HeaderAuthConfig
+          : undefined;
         for (const tool of tools) {
           this.implementations.set(
             `${domain.name}.${tool.name}`,
-            buildHttpImplementation(tool, baseUrl)
+            buildHttpImplementation(tool, baseUrl, headerAuth)
           );
         }
       } else if (domain.adapter === 'lambda') {
@@ -234,7 +237,8 @@ export class CmxServer {
 /** Build an HTTP-based tool implementation for Express routes */
 function buildHttpImplementation(
   tool: ToolDefinition,
-  baseUrl: string
+  baseUrl: string,
+  auth?: HeaderAuthConfig
 ): ToolImplementation {
   return async (params: Record<string, unknown>) => {
     let url = `${baseUrl}${tool.route}`;
@@ -267,9 +271,19 @@ function buildHttpImplementation(
       }
     }
 
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    // Inject auth header from environment variable at request time
+    if (auth) {
+      const value = process.env[auth.envVar];
+      if (value) {
+        headers[auth.key] = value;
+      }
+    }
+
     const fetchOpts: RequestInit = {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
     };
 
     if (method !== 'GET' && method !== 'DELETE' && Object.keys(bodyParams).length > 0) {

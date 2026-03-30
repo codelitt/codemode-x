@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import type { Adapter, ToolDefinition, AdapterOptions, ParameterDef } from '../src/types.js';
+import { isScopeAuth, type Adapter, type ToolDefinition, type AdapterOptions, type ParameterDef } from '../src/types.js';
 
 /** Method → name prefix mapping */
 const METHOD_PREFIX: Record<string, string> = {
@@ -160,7 +160,7 @@ function extractOperations(spec: OpenAPISpec, domain: string, opts?: AdapterOpti
         readOnly,
         route: path,
         method: method.toUpperCase(),
-        auth: opts?.auth?.provider,
+        auth: isScopeAuth(opts?.auth) ? opts.auth.provider : undefined,
       });
     }
   }
