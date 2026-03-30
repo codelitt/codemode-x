@@ -1,14 +1,14 @@
 import { defineConfig } from '../../src/types.js';
 
 /**
- * Example: Rent comps Express API.
+ * Example: Express API + markdown docs.
  * Point source at your Express server file — codemode-x auto-discovers routes.
  */
 export default defineConfig({
-  sdkName: 'carbon',
+  sdkName: 'myapp',
   domains: [
     {
-      name: 'rentComps',
+      name: 'api',
       adapter: 'express',
       source: './server.js',
       baseUrl: 'http://localhost:3001',

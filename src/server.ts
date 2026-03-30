@@ -1,9 +1,6 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import { resolve, dirname } from 'path';
 import { existsSync } from 'fs';
 
@@ -25,7 +22,7 @@ import { mcpBridgeAdapter, buildMcpBridgeInvoker } from '../adapters/mcp-bridge.
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
 
 export class CmxServer {
-  private server: Server;
+  private server: McpServer;
   private registry: ToolRegistry;
   private searchIndex: SearchIndex;
   private executor: SandboxExecutor | DirectExecutor;
@@ -50,12 +47,7 @@ export class CmxServer {
     this.registry.registerAdapter(pythonAdapter);
     this.registry.registerAdapter(mcpBridgeAdapter);
 
-    this.server = new Server(
-      { name: 'codemode-x', version: '0.1.0' },
-      { capabilities: { tools: {} } }
-    );
-
-    this.setupHandlers();
+    this.server = new McpServer({ name: 'codemode-x', version: '0.1.0' });
   }
 
   /** Load all domains from config and build the search index */
@@ -69,6 +61,9 @@ export class CmxServer {
     const allTools = this.registry.getAllTools();
     this.searchIndex.index(allTools);
     console.error(`[cmx] Indexed ${allTools.length} tools across ${this.registry.domains.length} domains`);
+
+    // Register the 2 meta-tools with the MCP server
+    this.registerTools();
 
     // Build implementations for HTTP-based tools (Express, OpenAPI)
     for (const domain of this.config.domains) {
@@ -136,64 +131,34 @@ export class CmxServer {
     }
   }
 
-  private setupHandlers(): void {
-    // List the 2 meta-tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [
-        {
-          name: 'cmx_search',
-          description: `Search ${this.config.sdkName} APIs and docs. Returns matching tool signatures + TypeScript types. Use this to discover what's available before writing code.`,
-          inputSchema: {
-            type: 'object' as const,
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Natural language or keyword search (e.g., "properties", "rent data", "comps")',
-              },
-            },
-            required: ['query'],
-          },
-        },
-        {
-          name: 'cmx_execute',
-          description: `Execute TypeScript code against the ${this.config.sdkName} SDK. Use sdk.<domain>.<method>(params) to call APIs. Code runs in a sandbox.`,
-          inputSchema: {
-            type: 'object' as const,
-            properties: {
-              code: {
-                type: 'string',
-                description: 'TypeScript code using sdk.<domain>.<method>(). Must use await for async calls.',
-              },
-            },
-            required: ['code'],
-          },
-        },
-      ],
-    }));
+  private registerTools(): void {
+    this.server.registerTool(
+      'cmx_search',
+      {
+        description: `Search ${this.config.sdkName} APIs and docs. Returns matching tool signatures + TypeScript types. Use this to discover what's available before writing code.`,
+        inputSchema: z.object({
+          query: z.string().describe('Natural language or keyword search (e.g., "properties", "rent data", "comps")'),
+        }),
+      },
+      async ({ query }) => this.handleSearch(query),
+    );
 
-    // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-
-      if (name === 'cmx_search') {
-        return this.handleSearch(args?.query as string);
-      }
-
-      if (name === 'cmx_execute') {
-        return this.handleExecute(args?.code as string);
-      }
-
-      return {
-        content: [{ type: 'text', text: `Unknown tool: ${name}` }],
-        isError: true,
-      };
-    });
+    this.server.registerTool(
+      'cmx_execute',
+      {
+        description: `Execute TypeScript code against the ${this.config.sdkName} SDK. Use sdk.<domain>.<method>(params) to call APIs. Code runs in a sandbox.`,
+        inputSchema: z.object({
+          code: z.string().describe('TypeScript code using sdk.<domain>.<method>(). Must use await for async calls.'),
+        }),
+      },
+      async ({ code }) => this.handleExecute(code),
+    );
   }
 
   private async handleSearch(query: string) {
     if (!query?.trim()) {
       return {
-        content: [{ type: 'text', text: 'Please provide a search query.' }],
+        content: [{ type: 'text' as const, text: 'Please provide a search query.' }],
         isError: true,
       };
     }
@@ -202,14 +167,14 @@ export class CmxServer {
     const formatted = formatSearchResults(this.config.sdkName, results);
 
     return {
-      content: [{ type: 'text', text: formatted }],
+      content: [{ type: 'text' as const, text: formatted }],
     };
   }
 
   private async handleExecute(code: string) {
     if (!code?.trim()) {
       return {
-        content: [{ type: 'text', text: 'Please provide code to execute.' }],
+        content: [{ type: 'text' as const, text: 'Please provide code to execute.' }],
         isError: true,
       };
     }
@@ -249,13 +214,17 @@ export class CmxServer {
     output.push(`\n(${result.durationMs}ms, ${this.callLog.length} API calls)`);
 
     return {
-      content: [{ type: 'text', text: output.join('\n') }],
+      content: [{ type: 'text' as const, text: output.join('\n') }],
       isError: !result.success,
     };
   }
 
   async start(): Promise<void> {
-    await this.initialize();
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Initialization timed out after 30s')), 30_000)
+    );
+    await Promise.race([this.initialize(), timeout]);
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('[cmx] Server started on stdio');

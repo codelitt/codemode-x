@@ -1,6 +1,6 @@
 {
   "name": "codemode-x",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Universal Code Mode Plugin for Claude Code — compress any API into 2 MCP tools",
   "type": "module",
   "main": "dist/server.js",
@@ -24,7 +24,8 @@
   "keywords": ["claude-code", "mcp", "plugin", "sdk", "api"],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "zod": "^3.25.0",
     "acorn": "^8.14.1",
     "acorn-walk": "^8.3.4",
     "better-sqlite3": "^11.8.1",

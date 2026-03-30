@@ -1,28 +1,28 @@
 import { defineConfig } from '../../src/types.js';
 
 /**
- * Carbon CREI config — rent comps Express API + internal docs.
+ * Example: Express API + internal docs.
  *
  * Usage:
- *   1. Start rent-comps backend: cd carbon-rent-comps/rent-comps-backend && node server.js
+ *   1. Start your Express backend: node server.js
  *   2. Copy this file to your project root
  *   3. Run: npx codemode-x test
  */
 export default defineConfig({
-  sdkName: 'carbon',
+  sdkName: 'myapp',
   domains: [
     {
-      name: 'rentComps',
+      name: 'api',
       adapter: 'express',
-      source: '../carbon-rent-comps/rent-comps-backend/server.js',
+      source: './server.js',
       baseUrl: 'http://localhost:3001',
       auth: { scope: 'readwrite' },
     },
-    // Uncomment to index Carbon docs as searchable knowledge:
+    // Uncomment to index docs as searchable knowledge:
     // {
     //   name: 'docs',
     //   adapter: 'markdown',
-    //   source: '../memory/**/*.md',
+    //   source: './docs/**/*.md',
     // },
   ],
 });

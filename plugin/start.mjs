@@ -10,6 +10,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+process.on('unhandledRejection', (err) => {
+  process.stderr.write(`[cmx] unhandledRejection: ${err}\n`);
+});
+process.on('uncaughtException', (err) => {
+  process.stderr.write(`[cmx] uncaughtException: ${err?.message ?? err}\n`);
+});
+
 async function main() {
   try {
     const { CmxServer, loadConfig } = await import(resolve(__dirname, '../dist/src/server.js'));

@@ -6,7 +6,7 @@
  *   2. Run: npx tsx tests/live-e2e.ts [server-path] [base-url]
  *
  * Defaults:
- *   server-path: ../carbon-rent-comps/rent-comps-backend/server.js
+ *   server-path: ./server.js (or pass your Express server path as arg)
  *   base-url: http://localhost:3001
  */
 
@@ -20,7 +20,7 @@ import { CredentialStore } from '../src/auth.js';
 import { expressAdapter } from '../adapters/express.js';
 import type { ToolDefinition } from '../src/types.js';
 
-const serverPath = process.argv[2] || resolve(import.meta.dirname, '../../carbon-rent-comps/rent-comps-backend/server.js');
+const serverPath = process.argv[2] || resolve(process.cwd(), './server.js');
 const baseUrl = process.argv[3] || 'http://localhost:3001';
 
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
