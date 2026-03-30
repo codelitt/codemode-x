@@ -121,18 +121,33 @@ async function runInit() {
   writeFileSync(configPath, configContent, 'utf-8');
   console.log(`\n✅ Config written to ${relative(cwd, configPath)}`);
 
-  // Generate Claude Code MCP settings snippet
-  console.log(`\nTo add to Claude Code, run:`);
-  console.log(`  claude mcp add codemode-x -- node ${resolve(__dirname, '../plugin/start.mjs')}`);
-  console.log(`\nOr add to .claude/settings.json:`);
-  console.log(JSON.stringify({
+  // Generate .mcp.json for Claude Code
+  const mcpConfig = {
     mcpServers: {
       'codemode-x': {
+        type: 'stdio',
         command: 'node',
         args: [resolve(__dirname, '../plugin/start.mjs')],
+        cwd: cwd,
       },
     },
-  }, null, 2));
+  };
+  const mcpPath = resolve(cwd, '.mcp.json');
+  writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2) + '\n', 'utf-8');
+  console.log(`✅ Claude Code MCP config written to .mcp.json`);
+
+  // Remind about .gitignore
+  const gitignorePath = resolve(cwd, '.gitignore');
+  if (existsSync(gitignorePath)) {
+    const gitignore = readFileSync(gitignorePath, 'utf-8');
+    if (!gitignore.includes('.mcp.json')) {
+      console.log(`\n⚠️  Add .mcp.json to your .gitignore (it may contain secrets via env vars)`);
+    }
+  } else {
+    console.log(`\n⚠️  Consider adding .mcp.json to .gitignore if you add env vars with secrets`);
+  }
+
+  console.log(`\nRestart Claude Code to load the tools.`);
 
   rl.close();
 }

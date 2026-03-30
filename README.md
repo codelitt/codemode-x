@@ -55,9 +55,27 @@ npx codemode-x start
 
 ### Adding to Claude Code
 
-```bash
-claude mcp add codemode-x -- node /path/to/codemode-x/plugin/start.mjs
+`npx codemode-x init` generates a `.mcp.json` file automatically. To set it up manually, create `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "codemode-x": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/path/to/codemode-x/plugin/start.mjs"],
+      "cwd": "/path/to/your/project",
+      "env": {
+        "MY_API_KEY": "${MY_API_KEY}"
+      }
+    }
+  }
+}
 ```
+
+Then restart Claude Code. The `cmx_search` and `cmx_execute` tools will appear automatically.
+
+> **Note:** Add `.mcp.json` to your `.gitignore` if it contains secrets or env var references.
 
 ## Adapters
 
