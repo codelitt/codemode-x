@@ -1,0 +1,34 @@
+{
+  "name": "codemode-x",
+  "owner": {
+    "name": "Codelitt",
+    "email": "eng@codelitt.com"
+  },
+  "metadata": {
+    "description": "Claude Code plugins by Codelitt",
+    "version": "0.4.0"
+  },
+  "plugins": [
+    {
+      "name": "codemode-x",
+      "source": "./",
+      "description": "Compress any API, database, or docs into 2 MCP tools (cmx_search + cmx_execute). One config file, universal SDK, sandboxed TypeScript execution.",
+      "version": "0.4.0",
+      "author": {
+        "name": "Codelitt"
+      },
+      "category": "development",
+      "keywords": [
+        "mcp",
+        "api",
+        "sdk",
+        "code-execution",
+        "sandbox",
+        "typescript",
+        "express",
+        "openapi",
+        "database"
+      ]
+    }
+  ]
+}

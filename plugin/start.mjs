@@ -7,8 +7,23 @@
 
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
+import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const rootDir = resolve(__dirname, '..');
+
+// Auto-install dependencies if missing (marketplace clones repo without npm install)
+if (!existsSync(resolve(rootDir, 'node_modules'))) {
+  process.stderr.write('[cmx] Installing dependencies...\n');
+  try {
+    execSync('npm install --production', { cwd: rootDir, stdio: 'pipe', timeout: 60_000 });
+    process.stderr.write('[cmx] Dependencies installed.\n');
+  } catch (err) {
+    process.stderr.write(`[cmx] Failed to install dependencies: ${err.message}\n`);
+    process.exit(1);
+  }
+}
 
 process.on('unhandledRejection', (err) => {
   process.stderr.write(`[cmx] unhandledRejection: ${err}\n`);

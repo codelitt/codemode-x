@@ -121,13 +121,13 @@ async function runInit() {
   writeFileSync(configPath, configContent, 'utf-8');
   console.log(`\n✅ Config written to ${relative(cwd, configPath)}`);
 
-  // Generate .mcp.json for Claude Code
+  // Generate .mcp.json for Claude Code (uses npx for portability)
   const mcpConfig = {
     mcpServers: {
       'codemode-x': {
         type: 'stdio',
-        command: 'node',
-        args: [resolve(__dirname, '../plugin/start.mjs')],
+        command: 'npx',
+        args: ['-y', 'codemode-x', 'start'],
         cwd: cwd,
       },
     },

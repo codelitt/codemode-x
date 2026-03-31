@@ -1,17 +1,31 @@
 {
   "name": "codemode-x",
-  "version": "0.3.2",
-  "description": "Universal Code Mode Plugin for Claude Code — compress any API into 2 MCP tools",
+  "version": "0.4.0",
+  "description": "Compress any API, database, or docs into 2 MCP tools (cmx_search + cmx_execute)",
   "type": "module",
-  "main": "dist/server.js",
+  "main": "dist/src/server.js",
   "bin": {
     "codemode-x": "dist/src/cli.js"
   },
   "files": [
     "dist",
     "plugin",
+    ".claude-plugin",
+    ".mcp.json",
     "README.md"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codelitt/codemode-x"
+  },
+  "homepage": "https://github.com/codelitt/codemode-x#readme",
+  "bugs": "https://github.com/codelitt/codemode-x/issues",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

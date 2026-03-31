@@ -1,0 +1,30 @@
+{
+  "name": "codemode-x",
+  "version": "0.4.0",
+  "description": "Compress any API, database, or docs into 2 MCP tools (cmx_search + cmx_execute). One config file, universal SDK, sandboxed TypeScript execution.",
+  "author": {
+    "name": "Codelitt",
+    "url": "https://github.com/codelitt"
+  },
+  "homepage": "https://github.com/codelitt/codemode-x#readme",
+  "repository": "https://github.com/codelitt/codemode-x",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "api",
+    "sdk",
+    "code-execution",
+    "sandbox",
+    "typescript",
+    "express",
+    "openapi",
+    "database",
+    "markdown"
+  ],
+  "mcpServers": {
+    "codemode-x": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/plugin/start.mjs"]
+    }
+  }
+}

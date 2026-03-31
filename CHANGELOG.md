@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0] - 2026-03-31
+
+### Added
+- **Claude Code marketplace plugin** — `.claude-plugin/plugin.json` and `marketplace.json` enable installation via the Claude Code plugin marketplace.
+- **npm publishing** — Package is now published to npm. Install globally with `npm install -g codemode-x` or use `npx codemode-x init` to set up a project.
+- **Auto-install dependencies** — `plugin/start.mjs` detects missing `node_modules/` and runs `npm install --production` automatically. Handles marketplace installs where Claude Code clones the repo without installing dependencies.
+- **Portable `.mcp.json`** — `codemode-x init` now generates `.mcp.json` using `npx codemode-x start` instead of absolute paths, making configs portable across machines.
+
+### Changed
+- `package.json` now includes `repository`, `homepage`, `engines`, `publishConfig` for npm.
+- `files` array includes `.claude-plugin/` and `.mcp.json` for marketplace distribution.
+
 ## [0.3.2] - 2026-03-31
 
 ### Added

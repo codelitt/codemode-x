@@ -63,7 +63,7 @@ export class CmxServer {
     // Create MCP server with dynamic instructions built from loaded domains
     const instructions = this.buildInstructions();
     this.server = new McpServer(
-      { name: 'codemode-x', version: '0.3.2' },
+      { name: 'codemode-x', version: '0.4.0' },
       { instructions },
     );
 
