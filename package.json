@@ -1,6 +1,6 @@
 {
   "name": "codemode-x",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Universal Code Mode Plugin for Claude Code — compress any API into 2 MCP tools",
   "type": "module",
   "main": "dist/server.js",

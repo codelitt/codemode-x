@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.3.2] - 2026-03-31
+
+### Added
+- **MCP server instructions** — Server now sends dynamic `instructions` during MCP initialization, built from loaded domains and project config. These load eagerly into the LLM's system prompt (not deferred with tools), ensuring codemode-x gets considered for data queries even when other MCP plugins compete for tool selection.
+
 ## [0.3.1] - 2026-03-31
 
 ### Added

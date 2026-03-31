@@ -22,7 +22,7 @@ import { mcpBridgeAdapter, buildMcpBridgeInvoker } from '../adapters/mcp-bridge.
 type ToolImplementation = (args: Record<string, unknown>) => Promise<unknown>;
 
 export class CmxServer {
-  private server: McpServer;
+  private server!: McpServer;
   private registry: ToolRegistry;
   private searchIndex: SearchIndex;
   private executor: SandboxExecutor | DirectExecutor;
@@ -46,8 +46,6 @@ export class CmxServer {
     this.registry.registerAdapter(databaseAdapter);
     this.registry.registerAdapter(pythonAdapter);
     this.registry.registerAdapter(mcpBridgeAdapter);
-
-    this.server = new McpServer({ name: 'codemode-x', version: '0.3.1' });
   }
 
   /** Load all domains from config and build the search index */
@@ -61,6 +59,13 @@ export class CmxServer {
     const allTools = this.registry.getAllTools();
     this.searchIndex.index(allTools);
     console.error(`[cmx] Indexed ${allTools.length} tools across ${this.registry.domains.length} domains`);
+
+    // Create MCP server with dynamic instructions built from loaded domains
+    const instructions = this.buildInstructions();
+    this.server = new McpServer(
+      { name: 'codemode-x', version: '0.3.2' },
+      { instructions },
+    );
 
     // Register the 2 meta-tools with the MCP server
     this.registerTools();
@@ -132,6 +137,21 @@ export class CmxServer {
         }
       }
     }
+  }
+
+  private buildInstructions(): string {
+    const cap = this.buildCapabilitySummary();
+    const desc = this.config.description ?? '';
+    const lines = [
+      `codemode-x provides cmx_search and cmx_execute tools for the "${this.config.sdkName}" SDK.`,
+      `Available: ${cap}.`,
+    ];
+    if (desc) lines.push(desc);
+    lines.push(
+      `Use cmx_execute for data queries, API calls, and analysis — it already knows the schema, auth, and connections.`,
+      `Use cmx_search first to discover method signatures if unsure what's available.`,
+    );
+    return lines.join(' ');
   }
 
   private buildCapabilitySummary(): string {
