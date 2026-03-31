@@ -73,6 +73,7 @@ export interface DomainConfig {
 
 export interface CmxConfig {
   sdkName: string;
+  description?: string; // Project-specific context to append to tool descriptions (e.g., "Query rent/comp data across 8 multifamily properties")
   domains: DomainConfig[];
   executor?: {
     timeout?: number;

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-03-31
+
+### Added
+- **Dynamic tool descriptions** — `cmx_search` and `cmx_execute` descriptions now auto-include available domains, tool counts, and sample tool names from the registry. Claude can see what the SDK offers without searching first.
+- **`description` config field** — Projects can add context-specific description text (e.g., "Query rent data across 8 properties") that gets appended to both tool descriptions. Helps Claude select codemode-x over generic alternatives.
+- Stronger routing language in `cmx_execute` description: "USE THIS for any data question — it already knows the schema, auth, and connections."
+
 ## [0.3.0] - 2026-03-30
 
 ### Fixed

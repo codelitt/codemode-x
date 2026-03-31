@@ -47,7 +47,7 @@ export class CmxServer {
     this.registry.registerAdapter(pythonAdapter);
     this.registry.registerAdapter(mcpBridgeAdapter);
 
-    this.server = new McpServer({ name: 'codemode-x', version: '0.3.0' });
+    this.server = new McpServer({ name: 'codemode-x', version: '0.3.1' });
   }
 
   /** Load all domains from config and build the search index */
@@ -134,11 +134,25 @@ export class CmxServer {
     }
   }
 
+  private buildCapabilitySummary(): string {
+    const parts: string[] = [];
+    for (const domainName of this.registry.domains) {
+      const tools = this.registry.getToolsByDomain(domainName);
+      const names = tools.slice(0, 8).map(t => t.name.replace(/^(get|list|fetch)/, '').replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '')).join(', ');
+      const suffix = tools.length > 8 ? `, +${tools.length - 8} more` : '';
+      parts.push(`${domainName} (${tools.length} tools — ${names}${suffix})`);
+    }
+    return parts.join('; ');
+  }
+
   private registerTools(): void {
+    const cap = this.buildCapabilitySummary();
+    const desc = this.config.description ? ` ${this.config.description}` : '';
+
     this.server.registerTool(
       'cmx_search',
       {
-        description: `Search ${this.config.sdkName} APIs and docs. Returns matching tool signatures + TypeScript types. Use this to discover what's available before writing code.`,
+        description: `Search ${this.config.sdkName} APIs and docs. Returns matching tool signatures + TypeScript types. Use this FIRST to discover available methods before writing cmx_execute code. Domains: ${cap}.${desc}`,
         inputSchema: z.object({
           query: z.string().describe('Natural language or keyword search (e.g., "properties", "rent data", "comps")'),
         }),
@@ -149,7 +163,7 @@ export class CmxServer {
     this.server.registerTool(
       'cmx_execute',
       {
-        description: `Execute TypeScript code against the ${this.config.sdkName} SDK. Use sdk.<domain>.<method>(params) to call APIs. Code runs in a sandbox.`,
+        description: `Execute TypeScript code against the ${this.config.sdkName} SDK. Use sdk.<domain>.<method>(params) to call APIs. Code runs in a sandbox. USE THIS for any data question — it already knows the schema, auth, and connections. Domains: ${cap}.${desc}`,
         inputSchema: z.object({
           code: z.string().describe('TypeScript code using sdk.<domain>.<method>(). Must use await for async calls.'),
         }),
