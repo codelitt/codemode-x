@@ -53,29 +53,51 @@ npx codemode-x test
 npx codemode-x start
 ```
 
-### Adding to Claude Code
+### Install
 
-`npx codemode-x init` generates a `.mcp.json` file automatically. To set it up manually, create `.mcp.json` in your project root:
+**Option 1: Claude Code marketplace (recommended)**
+
+```bash
+/install codemode-x
+```
+
+This installs codemode-x as a Claude Code plugin with automatic updates. After installing, run `npx codemode-x init` in your project to generate a config.
+
+If codemode-x isn't in your marketplace yet, add it first:
+
+```bash
+/plugin marketplace add codelitt/codemode-x
+/plugin install codemode-x@codemode-x
+```
+
+**Option 2: npm (per-project)**
+
+```bash
+npm install -g codemode-x
+cd your-project
+npx codemode-x init    # generates codemode-x.config.js + .mcp.json
+```
+
+Restart Claude Code. The `cmx_search` and `cmx_execute` tools appear automatically.
+
+**Option 3: Manual `.mcp.json`**
+
+Create `.mcp.json` in your project root:
 
 ```json
 {
   "mcpServers": {
     "codemode-x": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/path/to/codemode-x/plugin/start.mjs"],
-      "cwd": "/path/to/your/project",
-      "env": {
-        "MY_API_KEY": "${MY_API_KEY}"
-      }
+      "command": "npx",
+      "args": ["-y", "codemode-x", "start"],
+      "cwd": "/path/to/your/project"
     }
   }
 }
 ```
 
-Then restart Claude Code. The `cmx_search` and `cmx_execute` tools will appear automatically.
-
-> **Note:** Add `.mcp.json` to your `.gitignore` if it contains secrets or env var references.
+> **Note:** Add `.mcp.json` to your `.gitignore` if it contains env vars with secrets.
 
 ## Adapters
 
