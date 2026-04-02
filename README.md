@@ -19,6 +19,14 @@ Two tools handle everything:
 1. **`cmx_search(query)`** — find available APIs, database tables, and docs via FTS5 full-text search. Returns matching tool signatures and TS types for only the matched tools.
 2. **`cmx_execute(code)`** — run TypeScript using `sdk.<domain>.<method>()`. AST-validated, sandboxed, credentials injected at runtime.
 
+This is not RAG for APIs. The search index holds function signatures, not data. When Claude calls `sdk.api.getUsers()`, that's a real HTTP request to your running server. When it calls `sdk.data.rawQuery({ sql: '...' })`, that hits your actual database. The 2-tool compression is about discovery — Claude finds the right endpoint in ~500 tokens instead of having every tool definition in context.
+
+### Why not just use a bigger context window?
+
+Bigger windows help, but they don't solve the economics. Every MCP tool you register costs tokens on every request — even if Claude only uses one. 25 endpoints means ~100K tokens of tool schemas before Claude writes a single line of code. codemode-x makes that ~1K tokens and Claude searches for what it needs.
+
+It's the same reason databases have indexes even when you have plenty of RAM — search beats scan.
+
 ## Maturity
 
 Developers at [Codelitt](https://www.codelitt.com/) dogfood codemode-x at [Carbon](https://www.carbonresidential.com/) for real estate operations. The Express, OpenAPI, and Database adapters run against production APIs and data daily. The Markdown, Lambda (manifest mode), Python, and MCP Bridge adapters are implemented with test coverage but are earlier in maturity. Lambda AWS discovery mode is beta.
