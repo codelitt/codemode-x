@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-04-01
+
+### Fixed
+- **OpenAPI route parameter support** — `buildHttpImplementation` now handles both Express `:id` and OpenAPI `{id}` route parameter styles. Previously, OpenAPI paths with `{param}` syntax were not substituted during HTTP execution. This is a purely additive change — existing Express-style routes work exactly as before.
+
 ## [0.4.0] - 2026-03-31
 
 ### Added
