@@ -1,6 +1,6 @@
 # codemode-x
 
-MCP plugin for Claude Code. Takes your APIs, databases, Lambda functions, and docs and compresses them into 2 MCP tools (~1,000 tokens) instead of N tools (100K+ tokens).
+MCP plugin for Claude Code. Compresses your APIs, databases, Lambda functions, and docs into 2 MCP tools (~1,000 tokens) instead of N tools (100K+ tokens).
 
 Claude writes TypeScript against a typed SDK. Code runs in a sandbox.
 
@@ -14,22 +14,22 @@ cmx_execute("await sdk.api.getUsers()")                         →  real API ca
 cmx_execute("await sdk.data.rawQuery({ sql: 'SELECT ...' })")  →  database query, read-only
 ```
 
-Two tools handle everything:
+Two tools:
 
-1. **`cmx_search(query)`** — find available APIs, database tables, and docs via FTS5 full-text search. Returns matching tool signatures and TS types for only the matched tools.
-2. **`cmx_execute(code)`** — run TypeScript using `sdk.<domain>.<method>()`. AST-validated, sandboxed, credentials injected at runtime.
+1. `cmx_search(query)` — FTS5 full-text search across all your APIs, database tables, and docs. Returns typed SDK signatures for matches only.
+2. `cmx_execute(code)` — runs TypeScript in a VM sandbox using `sdk.<domain>.<method>()`. AST-validated. Credentials injected at runtime, never in context.
 
-This is not RAG for APIs. The search index holds function signatures, not data. When Claude calls `sdk.api.getUsers()`, that's a real HTTP request to your running server. When it calls `sdk.data.rawQuery({ sql: '...' })`, that hits your actual database. The 2-tool compression is about discovery — Claude finds the right endpoint in ~500 tokens instead of having every tool definition in context.
+This is not RAG. The search index holds function signatures, not data. `sdk.api.getUsers()` makes a real HTTP request to your running server. `sdk.data.rawQuery({ sql: '...' })` hits your actual database. The compression is about discovery — Claude finds the right endpoint in ~500 tokens instead of loading every tool definition into context.
 
 ### Why not just use a bigger context window?
 
-Bigger windows help, but they don't solve the economics. Every MCP tool you register costs tokens on every request — even if Claude only uses one. 25 endpoints means ~100K tokens of tool schemas before Claude writes a single line of code. codemode-x makes that ~1K tokens and Claude searches for what it needs.
+Every MCP tool you register costs tokens on every request, even if Claude only uses one. 25 endpoints = ~100K tokens of tool schemas before Claude writes a single line of code. codemode-x makes that ~1K tokens.
 
-It's the same reason databases have indexes even when you have plenty of RAM — search beats scan.
+Same reason databases have indexes even when you have plenty of RAM.
 
 ## Maturity
 
-Developers at [Codelitt](https://www.codelitt.com/) dogfood codemode-x at [Carbon](https://www.carbonresidential.com/) for real estate operations. The Express, OpenAPI, and Database adapters run against production APIs and data daily. The Markdown, Lambda (manifest mode), Python, and MCP Bridge adapters are implemented with test coverage but are earlier in maturity. Lambda AWS discovery mode is beta.
+Developers at [Codelitt](https://www.codelitt.com/) dogfood codemode-x at [Carbon](https://www.carbonresidential.com/) for real estate operations. Express, OpenAPI, and Database adapters run against production APIs and data daily. Markdown, Lambda (manifest mode), Python, and MCP Bridge have test coverage but less mileage. Lambda AWS discovery is beta.
 
 ## Quick start
 
@@ -67,22 +67,22 @@ npx codemode-x start
 
 ### Install
 
-**Option 1: Claude Code marketplace (recommended)**
+**Option 1: Claude Code marketplace**
 
 ```bash
 /install codemode-x
 ```
 
-This installs codemode-x as a Claude Code plugin with automatic updates. After installing, run `npx codemode-x init` in your project to generate a config.
+Installs as a Claude Code plugin with automatic updates. Then run `npx codemode-x init` in your project to generate a config.
 
-If codemode-x isn't in your marketplace yet, add it first:
+If codemode-x isn't in your marketplace yet:
 
 ```bash
 /plugin marketplace add codelitt/codemode-x
 /plugin install codemode-x@codemode-x
 ```
 
-**Option 2: npm (per-project)**
+**Option 2: npm**
 
 ```bash
 npm install -g codemode-x
@@ -90,7 +90,7 @@ cd your-project
 npx codemode-x init    # generates codemode-x.config.js + .mcp.json
 ```
 
-Restart Claude Code. The `cmx_search` and `cmx_execute` tools appear automatically.
+Restart Claude Code. `cmx_search` and `cmx_execute` appear automatically.
 
 **Option 3: Manual `.mcp.json`**
 
@@ -109,11 +109,11 @@ Create `.mcp.json` in your project root:
 }
 ```
 
-> **Note:** Add `.mcp.json` to your `.gitignore` if it contains env vars with secrets.
+Add `.mcp.json` to `.gitignore` if it contains secrets.
 
 ## Adapters
 
-codemode-x uses adapters to understand different data sources. Each adapter introspects a source (API code, spec file, database, etc.) and generates typed SDK methods that Claude can search and call.
+Each adapter introspects a source (API code, spec file, database, etc.) and generates typed SDK methods.
 
 | Adapter | Source | What it does | Status |
 |---------|--------|--------------|--------|
@@ -125,13 +125,13 @@ codemode-x uses adapters to understand different data sources. Each adapter intr
 | [`python`](#python) | Python modules | Introspects functions via subprocess | Stable |
 | [`mcp-bridge`](#mcp-bridge) | Existing MCP servers | Bridges MCP tools into codemode-x | Stable |
 
-> **Status key:** *Production* = dogfooded in real workloads. *Stable* = implemented with test coverage, not yet used in production. *Beta* = functional but limited testing.
+*Production* = dogfooded in real workloads. *Stable* = implemented with test coverage, not yet production. *Beta* = functional but limited testing.
 
 ---
 
 ### Express
 
-Parses your Express.js source code using AST analysis. Extracts all `app.get()`, `app.post()`, etc. routes and generates typed SDK methods.
+Parses Express.js source via AST. Extracts `app.get()`, `app.post()`, etc. and generates typed SDK methods.
 
 ```js
 export default {
@@ -148,11 +148,11 @@ export default {
 };
 ```
 
-Claude sees methods like `sdk.api.getProperties()`, `sdk.api.createUser({ name, email })`. Calls are made via HTTP to your running server.
+Claude sees `sdk.api.getProperties()`, `sdk.api.createUser({ name, email })`. Calls go via HTTP to your running server.
 
 ### OpenAPI
 
-Parses OpenAPI 3.x / Swagger JSON specs. Extracts all operations with their parameters, request bodies, and response schemas.
+Parses OpenAPI 3.x / Swagger JSON specs. Extracts operations with parameters, request bodies, and response schemas.
 
 ```js
 export default {
@@ -168,11 +168,11 @@ export default {
 };
 ```
 
-Path parameters, query parameters, and request body properties all become typed method parameters. Response schemas are converted to TypeScript types.
+Path params, query params, and request body properties become typed method parameters. Response schemas become TypeScript types.
 
 ### Markdown
 
-Indexes markdown documentation as searchable content. Splits files by headings into sections, each becoming a searchable tool.
+Splits markdown files by heading into searchable sections.
 
 ```js
 export default {
@@ -187,11 +187,11 @@ export default {
 };
 ```
 
-Supports single files or glob patterns. When Claude searches, it finds relevant doc sections alongside API methods.
+Single files or globs. Claude finds relevant doc sections alongside API methods when searching.
 
 ### Lambda functions
 
-Turns AWS Lambda functions into SDK methods. Two modes:
+Two modes:
 
 **Manifest mode** — you define a JSON file with function names and schemas:
 
@@ -224,15 +224,15 @@ export default {
 };
 ```
 
-Invocation happens via `Lambda.invoke()`, not HTTP. Credentials come from your environment. Designed to scale to large function sets — Claude still sees just 2 MCP tools and searches across all of them.
+Invocation via `Lambda.invoke()`, not HTTP. Credentials from your environment.
 
-> **Note:** Manifest mode is fully tested. AWS discovery mode is beta — it works but hasn't been used in production yet.
+Manifest mode is fully tested. AWS discovery mode is beta — works but hasn't been used in production.
 
 Full guide: [docs/lambda-adapter.md](docs/lambda-adapter.md)
 
 ### Database
 
-Introspects a SQLite database schema and generates query tools automatically. The database is always opened **read-only**.
+Introspects a SQLite database schema and generates query tools. Read-only by default.
 
 ```js
 export default {
@@ -251,16 +251,15 @@ export default {
 };
 ```
 
-For each table, the adapter generates a `query{TableName}` tool with all columns as optional filter parameters:
+Per-table `query{TableName}` tools with columns as optional filters:
 
 ```typescript
-// Claude can write:
 await sdk.data.queryUsers()                     // SELECT * FROM users
 await sdk.data.queryUsers({ name: 'Alice' })    // WHERE name = 'Alice'
 await sdk.data.queryUsers({ age: 30 })          // WHERE age = 30
 ```
 
-It also generates a `rawQuery` tool for arbitrary read-only SQL:
+Plus a `rawQuery` tool for arbitrary read-only SQL:
 
 ```typescript
 await sdk.data.rawQuery({
@@ -268,18 +267,18 @@ await sdk.data.rawQuery({
 })
 ```
 
-**SQL validation** enforces read-only access:
+SQL validation:
 - Allowed: `SELECT`, `PRAGMA`, `EXPLAIN`
 - Blocked: `INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`
-- Multi-statement queries are rejected
+- Multi-statement queries rejected
 
-Column types are mapped automatically: `INTEGER` → `number`, `TEXT`/`VARCHAR` → `string`, `REAL` → `number`, `BOOLEAN` → `boolean`.
+Column types map automatically: `INTEGER` → `number`, `TEXT`/`VARCHAR` → `string`, `REAL` → `number`, `BOOLEAN` → `boolean`.
 
 Full guide: [docs/database-adapter.md](docs/database-adapter.md)
 
 ### Python
 
-Introspects Python modules via subprocess to extract function signatures, type hints, and docstrings. Each public function becomes an SDK method.
+Introspects Python modules via subprocess. Extracts function signatures, type hints, and docstrings. Each public function becomes an SDK method.
 
 ```js
 export default {
@@ -299,7 +298,7 @@ export default {
 };
 ```
 
-Given a Python function:
+Given:
 
 ```python
 def get_user_stats(user_id: str, days: int = 30) -> Dict[str, float]:
@@ -309,15 +308,15 @@ def get_user_stats(user_id: str, days: int = 30) -> Dict[str, float]:
 
 Claude sees: `sdk.analytics.getUserStats({ user_id: string, days?: number }) → Record<string, number>`
 
-Python type hints map automatically: `str` → `string`, `int`/`float` → `number`, `bool` → `boolean`, `List[X]` → `X[]`, `Optional[X]` → `X | null`.
+Type hints map: `str` → `string`, `int`/`float` → `number`, `bool` → `boolean`, `List[X]` → `X[]`, `Optional[X]` → `X | null`.
 
-Functions are called via subprocess — Python runs in its own process with params as JSON. No shared memory, no import conflicts.
+Functions run via subprocess. Python gets its own process with params as JSON. No shared memory, no import conflicts.
 
 Full guide: [docs/python-adapter.md](docs/python-adapter.md)
 
 ### MCP Bridge
 
-Connects to an existing MCP server and wraps its tools as codemode-x SDK methods. This bridges any MCP-compatible tool server into the 2-tool architecture.
+Wraps an existing MCP server's tools as codemode-x SDK methods.
 
 ```js
 export default {
@@ -336,7 +335,7 @@ export default {
 };
 ```
 
-The source can be a command string or a config object:
+Source can be a command string or config object:
 
 ```js
 // Command string
@@ -350,34 +349,30 @@ source: {
 }
 ```
 
-codemode-x connects via stdio transport, discovers all tools via `listTools()`, and maps their JSON Schema parameters to typed SDK methods. At runtime, `cmx_execute` proxies calls through the MCP client.
+Connects via stdio, discovers tools via `listTools()`, maps JSON Schema parameters to typed SDK methods. At runtime, `cmx_execute` proxies calls through the MCP client.
 
-This means you can take any existing MCP server — GitHub, Slack, Postgres, custom internal tools — and collapse them all into Claude's 2-tool interface with full search across all of them.
+Any MCP server — GitHub, Slack, Postgres, whatever — gets collapsed into the 2-tool interface with search across all of them.
 
 Full guide: [docs/mcp-bridge-adapter.md](docs/mcp-bridge-adapter.md)
 
 ## Memory database
 
-Pair codemode-x with [memory-x](https://github.com/codelitt/memory-x) to give Claude queryable, persistent memory backed by SQLite. memory-x turns any markdown files into structured tables — no hardcoded schemas, it dynamically infers structure from your content.
+Pair with [memory-x](https://github.com/codelitt/memory-x) for queryable, persistent memory backed by SQLite. memory-x turns markdown files into structured tables — dynamically infers schema from your content.
 
 ### Setup
 
 ```bash
-# Install memory-x
 npm install -g memory-x
 
-# Create and populate a memory database
 memoryx init
 memoryx import ./CLAUDE.md
 memoryx import ./docs/
-
-# Check what was created
 memoryx status
 ```
 
-### Using it with codemode-x
+### Using with codemode-x
 
-Add the memory database as a domain in your config:
+Add the memory database as a domain:
 
 ```js
 export default {
@@ -399,19 +394,12 @@ export default {
 };
 ```
 
-Now Claude can query your context alongside your APIs:
+Claude can query context alongside APIs:
 
 ```typescript
-// Who's on the team?
 await sdk.memory.queryPeople({ who: 'Alice' })
-
-// What does "SLA" mean?
 await sdk.memory.queryTerms({ term: 'SLA' })
-
-// Free-form search
 await sdk.memory.rawQuery({ sql: "SELECT * FROM people WHERE role LIKE '%Lead%'" })
-
-// And still call your APIs
 await sdk.api.getUsers()
 ```
 
@@ -419,53 +407,26 @@ Full guide: [docs/memory-database.md](docs/memory-database.md)
 
 ## Multi-domain configs
 
-The real power is combining multiple adapters in one config. Claude searches across all of them with a single `cmx_search` call:
+Combine adapters in one config. `cmx_search` searches across all of them:
 
 ```js
 export default {
   sdkName: 'myapp',
   domains: [
-    // REST API
-    {
-      name: 'api',
-      adapter: 'express',
-      source: './server.js',
-      baseUrl: 'http://localhost:3000',
-      auth: { scope: 'readwrite' },
-    },
-    // Serverless functions
-    {
-      name: 'payments',
-      adapter: 'lambda',
-      source: './manifests/payments.json',
-    },
-    // Application database
-    {
-      name: 'data',
-      adapter: 'database',
-      source: './app.db',
-    },
-    // Project context
-    {
-      name: 'memory',
-      adapter: 'database',
-      source: './memory.db',
-    },
-    // Documentation
-    {
-      name: 'docs',
-      adapter: 'markdown',
-      source: './docs/**/*.md',
-    },
+    { name: 'api',      adapter: 'express',  source: './server.js', baseUrl: 'http://localhost:3000', auth: { scope: 'readwrite' } },
+    { name: 'payments', adapter: 'lambda',   source: './manifests/payments.json' },
+    { name: 'data',     adapter: 'database', source: './app.db' },
+    { name: 'memory',   adapter: 'database', source: './memory.db' },
+    { name: 'docs',     adapter: 'markdown', source: './docs/**/*.md' },
   ],
 };
 ```
 
-A search for "users" might return results from the API (endpoints), the database (tables), and the docs (relevant sections) — all typed, all callable through the same `sdk.*` interface.
+Search for "users" returns API endpoints, database tables, and doc sections — all typed, all callable through `sdk.*`.
 
-### Real-world example: Carbon
+### How we use it at Carbon
 
-We use this internally at [Carbon](https://www.carbonresidential.com/) for real estate operations. In production, we run Express and OpenAPI adapters against our rent comps API and property management system. The database and markdown adapters handle portfolio context and operational docs.
+We run this at [Carbon](https://www.carbonresidential.com/) for real estate operations. Express and OpenAPI adapters hit our rent comps API and property management system in production. Database and markdown adapters handle portfolio context and ops docs.
 
 ```js
 export default {
@@ -479,7 +440,7 @@ export default {
 };
 ```
 
-Claude searches across all domains — "rent comps for Maple Ridge" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
+"rent comps for Maple Ridge" returns the API endpoint, the property record, and the relevant docs. Still 2 MCP tools.
 
 ## Architecture
 
@@ -493,28 +454,20 @@ User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.meth
 
 ### Security
 
-- **AST validation** blocks `require`, `import`, `fetch`, `process`, `eval`, and `Function`
-- **VM sandbox** via `vm.createContext` with no Node globals exposed
-- **Credentials injected** at execution time only, never visible in LLM context
-- **Header auth** — use `auth: { type: 'header', key: 'X-API-Key', envVar: 'MY_API_KEY' }` to inject auth headers from environment variables at request time
-- **Read-only by default** — write operations require explicit `auth: { scope: 'readwrite' }`
-- **Database access** is read-only by default — writable mode is opt-in via `options: { writable: true }`
-- **SQL validation** rejects all write statements and multi-statement queries in read-only mode
+- AST validation blocks `require`, `import`, `fetch`, `process`, `eval`, `Function`
+- VM sandbox via `vm.createContext` — no Node globals exposed
+- Credentials injected at execution time only, never in LLM context
+- Header auth: `auth: { type: 'header', key: 'X-API-Key', envVar: 'MY_API_KEY' }` injects from env vars at request time
+- Read-only by default — writes require explicit `auth: { scope: 'readwrite' }`
+- Database read-only by default — writable opt-in via `options: { writable: true }`
+- SQL validation rejects write statements and multi-statement queries in read-only mode
 
 ## CLI
 
 ```bash
-# Interactive setup — detects Express/OpenAPI files, generates config
-npx codemode-x init
-
-# Test config — discovers tools and shows what Claude will see
-npx codemode-x test
-
-# Start as MCP server (stdio transport)
-npx codemode-x start
-
-# Memory database — use memory-x (https://github.com/codelitt/memory-x)
-memoryx init && memoryx import ./CLAUDE.md
+npx codemode-x init     # interactive setup
+npx codemode-x test     # discover tools, show what Claude sees
+npx codemode-x start    # start MCP server (stdio)
 ```
 
 ## Development
@@ -524,20 +477,17 @@ npm install
 npm run build
 npm test
 
-# Watch mode
-npm run test:watch
-
-# Test against a live server (start your API first)
-npm run test:live
+npm run test:watch       # watch mode
+npm run test:live        # e2e against running server
 ```
 
 ## Docs
 
-- [Lambda Adapter](docs/lambda-adapter.md) — manifest format, AWS discovery, tagging convention, filtering
-- [Database Adapter](docs/database-adapter.md) — SQL validation, type mapping, table filtering
-- [Python Adapter](docs/python-adapter.md) — type mapping, subprocess execution, docstring parsing
-- [MCP Bridge Adapter](docs/mcp-bridge-adapter.md) — connecting existing MCP servers, JSON Schema mapping
-- [Memory Database](docs/memory-database.md) — using [memory-x](https://github.com/codelitt/memory-x) with codemode-x
+- [Lambda adapter](docs/lambda-adapter.md) — manifest format, AWS discovery, tagging, filtering
+- [Database adapter](docs/database-adapter.md) — SQL validation, type mapping, table filtering
+- [Python adapter](docs/python-adapter.md) — type mapping, subprocess execution, docstring parsing
+- [MCP Bridge adapter](docs/mcp-bridge-adapter.md) — connecting MCP servers, JSON Schema mapping
+- [Memory database](docs/memory-database.md) — using [memory-x](https://github.com/codelitt/memory-x) with codemode-x
 
 ## License
 
