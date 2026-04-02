@@ -278,11 +278,13 @@ function buildHttpImplementation(
     let url = `${baseUrl}${tool.route}`;
     const method = tool.method ?? 'GET';
 
-    // Substitute route params
-    const routeParams = (tool.route?.match(/:(\w+)/g) || []).map(p => p.slice(1));
+    // Substitute route params (Express :id and OpenAPI {id} styles)
+    const expressParams = (tool.route?.match(/:(\w+)/g) || []).map(p => p.slice(1));
+    const openApiParams = (tool.route?.match(/\{(\w+)\}/g) || []).map(p => p.slice(1, -1));
+    const routeParams = [...new Set([...expressParams, ...openApiParams])];
     for (const rp of routeParams) {
       if (params[rp] !== undefined) {
-        url = url.replace(`:${rp}`, String(params[rp]));
+        url = url.replace(`:${rp}`, String(params[rp])).replace(`{${rp}}`, String(params[rp]));
       }
     }
 
