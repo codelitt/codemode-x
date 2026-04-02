@@ -118,7 +118,7 @@ function resolveGlob(pattern: string): string[] {
     if (statSync(resolvedPattern).isFile()) {
       return [resolvedPattern];
     }
-  } catch {}
+  } catch (err) { console.error(`markdown adapter: failed to stat path "${resolvedPattern}":`, err); }
 
   // Handle ** glob patterns manually
   const parts = pattern.split('**');
@@ -140,7 +140,7 @@ function resolveGlob(pattern: string): string[] {
     if (statSync(resolvedPattern).isDirectory()) {
       return findFilesRecursive(resolvedPattern, '.md');
     }
-  } catch {}
+  } catch (err) { console.error(`markdown adapter: failed to stat directory "${resolvedPattern}":`, err); }
 
   return [];
 }
@@ -151,7 +151,8 @@ function findFiles(dir: string, ext: string): string[] {
       .filter(f => !ext || f.endsWith(ext))
       .map(f => resolve(dir, f))
       .filter(f => statSync(f).isFile());
-  } catch {
+  } catch (err) {
+    console.error(`markdown adapter: failed to list files in "${dir}":`, err);
     return [];
   }
 }
@@ -168,8 +169,8 @@ function findFilesRecursive(dir: string, ext: string): string[] {
         } else if (stat.isFile() && (!ext || entry.endsWith(ext))) {
           results.push(full);
         }
-      } catch {}
+      } catch (err) { console.error(`markdown adapter: failed to stat entry "${full}":`, err); }
     }
-  } catch {}
+  } catch (err) { console.error(`markdown adapter: failed to read directory "${dir}":`, err); }
   return results;
 }

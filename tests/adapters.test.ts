@@ -583,6 +583,147 @@ describe('Database Querier', () => {
   });
 });
 
+// ─── Database Adapter — Writable Mode ───────────────────────────
+
+describe('Database adapter — writable mode', () => {
+  let tmpDir: string;
+  let dbPath: string;
+  let tools: ToolDefinition[];
+  let querier: Map<string, (args: Record<string, unknown>) => Promise<unknown>>;
+
+  beforeAll(async () => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'cmx-db-writable-test-'));
+    dbPath = join(tmpDir, 'writable.db');
+
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(dbPath);
+    db.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT,
+        age INTEGER
+      );
+      INSERT INTO users VALUES (1, 'Alice', 'alice@test.com', 30);
+      INSERT INTO users VALUES (2, 'Bob', 'bob@test.com', 25);
+    `);
+    db.close();
+
+    tools = await databaseAdapter.parse(dbPath, { domain: 'testdb', writable: true } as any);
+    querier = await buildDatabaseQuerier(dbPath, true);
+  });
+
+  afterAll(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  // --- Tool generation tests ---
+
+  it('generates insert/update/delete tools when writable', () => {
+    const names = tools.map(t => t.name);
+    expect(names).toContain('insertUsers');
+    expect(names).toContain('updateUsers');
+    expect(names).toContain('deleteUsers');
+  });
+
+  it('marks write tools as readOnly: false', () => {
+    for (const name of ['insertUsers', 'updateUsers', 'deleteUsers']) {
+      const tool = tools.find(t => t.name === name)!;
+      expect(tool.readOnly).toBe(false);
+    }
+  });
+
+  it('insert tool has non-PK columns as parameters', () => {
+    const insertTool = tools.find(t => t.name === 'insertUsers')!;
+    const paramNames = insertTool.parameters.map(p => p.name);
+    expect(paramNames).toContain('name');
+    expect(paramNames).toContain('email');
+    expect(paramNames).toContain('age');
+    expect(paramNames).not.toContain('id');
+  });
+
+  it('insert tool marks NOT NULL columns as required', () => {
+    const insertTool = tools.find(t => t.name === 'insertUsers')!;
+    const nameParam = insertTool.parameters.find(p => p.name === 'name')!;
+    expect(nameParam.required).toBe(true);
+    const emailParam = insertTool.parameters.find(p => p.name === 'email')!;
+    expect(emailParam.required).toBe(false);
+  });
+
+  it('update tool requires PK as first parameter', () => {
+    const updateTool = tools.find(t => t.name === 'updateUsers')!;
+    const idParam = updateTool.parameters.find(p => p.name === 'id')!;
+    expect(idParam.required).toBe(true);
+  });
+
+  it('delete tool only has PK parameter', () => {
+    const deleteTool = tools.find(t => t.name === 'deleteUsers')!;
+    expect(deleteTool.parameters.length).toBe(1);
+    expect(deleteTool.parameters[0].name).toBe('id');
+    expect(deleteTool.parameters[0].required).toBe(true);
+  });
+
+  // --- Runtime insert/update/delete tests ---
+
+  it('insertUsers creates a row and returns id + changes', async () => {
+    const result = await querier.get('insertUsers')!({
+      name: 'Charlie',
+      email: 'charlie@test.com',
+      age: 35,
+    }) as any;
+    expect(result.changes).toBe(1);
+    expect(Number(result.id)).toBeGreaterThan(0);
+  });
+
+  it('insert then query returns the inserted row', async () => {
+    const insertResult = await querier.get('insertUsers')!({
+      name: 'Diana',
+      email: 'diana@test.com',
+      age: 28,
+    }) as any;
+
+    const rows = await querier.get('queryUsers')!({ name: 'Diana' }) as any[];
+    expect(rows.length).toBe(1);
+    expect(rows[0].name).toBe('Diana');
+    expect(rows[0].email).toBe('diana@test.com');
+    expect(rows[0].age).toBe(28);
+  });
+
+  it('updateUsers by PK returns changes: 1', async () => {
+    const result = await querier.get('updateUsers')!({
+      id: 1,
+      name: 'Alice Updated',
+    }) as any;
+    expect(result.changes).toBe(1);
+
+    // Verify the update persisted
+    const rows = await querier.get('queryUsers')!({ id: 1 }) as any[];
+    expect(rows[0].name).toBe('Alice Updated');
+  });
+
+  it('deleteUsers by PK returns changes: 1', async () => {
+    const result = await querier.get('deleteUsers')!({ id: 2 }) as any;
+    expect(result.changes).toBe(1);
+
+    // Verify deletion
+    const rows = await querier.get('queryUsers')!({ id: 2 }) as any[];
+    expect(rows.length).toBe(0);
+  });
+
+  it('update with non-existent PK returns changes: 0', async () => {
+    const result = await querier.get('updateUsers')!({
+      id: 9999,
+      name: 'Ghost',
+    }) as any;
+    expect(result.changes).toBe(0);
+  });
+
+  it('delete with non-existent PK returns changes: 0', async () => {
+    const result = await querier.get('deleteUsers')!({ id: 9999 }) as any;
+    expect(result.changes).toBe(0);
+  });
+});
+
 // ─── Memory Module (moved to memory-x) ─────────────────────────
 // Memory import/schema tests are now in the memory-x project.
 // See: https://github.com/codelitt/memory-x
