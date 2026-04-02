@@ -19,6 +19,10 @@ Two tools handle everything:
 1. **`cmx_search(query)`** — find available APIs, database tables, and docs via FTS5 full-text search. Returns matching tool signatures and TS types for only the matched tools.
 2. **`cmx_execute(code)`** — run TypeScript using `sdk.<domain>.<method>()`. AST-validated, sandboxed, credentials injected at runtime.
 
+## Maturity
+
+Developers at [Codelitt](https://www.codelitt.com/) dogfood codemode-x at [Carbon](https://www.carbonresidential.com/) for real estate operations. The Express, OpenAPI, and Database adapters run against production APIs and data daily. The Markdown, Lambda (manifest mode), Python, and MCP Bridge adapters are implemented with test coverage but are earlier in maturity. Lambda AWS discovery mode is beta.
+
 ## Quick start
 
 ```bash
@@ -105,13 +109,15 @@ codemode-x uses adapters to understand different data sources. Each adapter intr
 
 | Adapter | Source | What it does | Status |
 |---------|--------|--------------|--------|
-| [`express`](#express) | Express.js app file | Parses route handlers via AST | Done |
-| [`openapi`](#openapi) | OpenAPI 3.x spec (JSON) | Extracts operations + schemas | Done |
-| [`markdown`](#markdown) | Markdown files/globs | Indexes docs as searchable content | Done |
-| [`lambda`](#lambda-functions) | AWS Lambda functions | Manifest file or AWS discovery | Done |
-| [`database`](#database) | SQLite database file | Introspects schema, generates query tools | Done |
-| [`python`](#python) | Python modules | Introspects functions via subprocess | Done |
-| [`mcp-bridge`](#mcp-bridge) | Existing MCP servers | Bridges MCP tools into codemode-x | Done |
+| [`express`](#express) | Express.js app file | Parses route handlers via AST | Production |
+| [`openapi`](#openapi) | OpenAPI 3.x spec (JSON) | Extracts operations + schemas | Production |
+| [`database`](#database) | SQLite database file | Introspects schema, generates query tools | Production |
+| [`markdown`](#markdown) | Markdown files/globs | Indexes docs as searchable content | Stable |
+| [`lambda`](#lambda-functions) | AWS Lambda functions | Manifest file or AWS discovery | Manifest: Stable, AWS discovery: Beta |
+| [`python`](#python) | Python modules | Introspects functions via subprocess | Stable |
+| [`mcp-bridge`](#mcp-bridge) | Existing MCP servers | Bridges MCP tools into codemode-x | Stable |
+
+> **Status key:** *Production* = dogfooded in real workloads. *Stable* = implemented with test coverage, not yet used in production. *Beta* = functional but limited testing.
 
 ---
 
@@ -210,7 +216,9 @@ export default {
 };
 ```
 
-Invocation happens via `Lambda.invoke()`, not HTTP. Credentials come from your environment. Supports 1000+ functions — Claude still sees just 2 MCP tools and searches across all of them.
+Invocation happens via `Lambda.invoke()`, not HTTP. Credentials come from your environment. Designed to scale to large function sets — Claude still sees just 2 MCP tools and searches across all of them.
+
+> **Note:** Manifest mode is fully tested. AWS discovery mode is beta — it works but hasn't been used in production yet.
 
 Full guide: [docs/lambda-adapter.md](docs/lambda-adapter.md)
 
@@ -449,7 +457,7 @@ A search for "users" might return results from the API (endpoints), the database
 
 ### Real-world example: Carbon
 
-We use this internally at [Carbon](https://www.carbonresidential.com/) for real estate operations. One config connects a rent comps API, property database, investor context, and operational docs:
+We use this internally at [Carbon](https://www.carbonresidential.com/) for real estate operations. In production, we run Express and OpenAPI adapters against our rent comps API and property management system. The database and markdown adapters handle portfolio context and operational docs.
 
 ```js
 export default {
@@ -463,7 +471,7 @@ export default {
 };
 ```
 
-Claude can search across all domains — "rent comps for Maple Ridge" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
+Claude searches across all domains — "rent comps for Maple Ridge" returns the API endpoint, the property record, and the relevant documentation. Still just 2 MCP tools.
 
 ## Architecture
 
