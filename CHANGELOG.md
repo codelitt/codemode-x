@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.2] - 2026-04-07
+
+### Added
+- **OpenAPI adapter supports remote URLs** — `source` field can now be an `http://` or `https://` URL. The adapter fetches the spec at parse time. Local file paths still work as before.
+
 ## [0.4.1] - 2026-04-01
 
 ### Fixed

@@ -19,8 +19,16 @@ export const openapiAdapter: Adapter = {
   name: 'openapi',
 
   async parse(source: unknown, opts?: AdapterOptions): Promise<ToolDefinition[]> {
-    const filePath = resolve(String(source));
-    const raw = readFileSync(filePath, 'utf-8');
+    const sourceStr = String(source);
+    let raw: string;
+    if (sourceStr.startsWith('http://') || sourceStr.startsWith('https://')) {
+      const resp = await fetch(sourceStr);
+      if (!resp.ok) throw new Error(`Failed to fetch OpenAPI spec from ${sourceStr}: ${resp.status}`);
+      raw = await resp.text();
+    } else {
+      const filePath = resolve(sourceStr);
+      raw = readFileSync(filePath, 'utf-8');
+    }
     const spec = JSON.parse(raw) as OpenAPISpec;
     const domain = opts?.domain ?? 'api';
 
