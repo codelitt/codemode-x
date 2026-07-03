@@ -6,6 +6,8 @@
  *   npx codemode-x init          — interactive setup wizard
  *   npx codemode-x start          — start the MCP server
  *   npx codemode-x test           — test config by discovering tools
+ *   npx codemode-x search         — search tools, print signatures + types
+ *   npx codemode-x exec           — execute a code file in the sandbox
  */
 
 import { resolve, relative } from 'path';
@@ -26,6 +28,12 @@ async function main() {
     case 'test':
       await runTest();
       break;
+    case 'search':
+      await runSearch();
+      break;
+    case 'exec':
+      await runExec();
+      break;
     default:
       printUsage();
   }
@@ -39,11 +47,15 @@ Commands:
   init     Interactive setup wizard
   start    Start the MCP server
   test     Test config by discovering and listing tools
+  search   Search tools, print matching signatures + TypeScript types
+  exec     Execute a TypeScript/JavaScript file in the sandbox (- for stdin)
 
 Usage:
   npx codemode-x init
   npx codemode-x start [config-path]
   npx codemode-x test [config-path]
+  npx codemode-x search <query> [config-path]
+  npx codemode-x exec <code-file> [config-path]
 
 Memory database:
   Use memory-x (npm install -g memory-x) to create and manage memory databases.
@@ -300,6 +312,48 @@ async function runTest() {
   }
 
   console.log(`\n✅ Config is valid. ${allTools.length} total tools ready.`);
+}
+
+// ─── Search Tools ────────────────────────────────────────────────
+
+async function runSearch() {
+  const query = args[1];
+  if (!query) {
+    console.error('Usage: npx codemode-x search <query> [config-path]');
+    process.exit(1);
+  }
+  const configPath = args[2] || undefined;
+  const { CmxServer, loadConfig } = await import('./server.js');
+  const config = await loadConfig(configPath);
+  const server = new CmxServer(config);
+  await server.initialize();
+  console.log(server.search(query));
+  process.exit(0);
+}
+
+// ─── Execute Code ────────────────────────────────────────────────
+
+async function runExec() {
+  const codeFile = args[1];
+  if (!codeFile) {
+    console.error('Usage: npx codemode-x exec <code-file> [config-path]   (use - to read from stdin)');
+    process.exit(1);
+  }
+  const code = codeFile === '-'
+    ? readFileSync(0, 'utf-8') // fd 0 = stdin
+    : readFileSync(resolve(codeFile), 'utf-8');
+  const configPath = args[2] || undefined;
+  const { CmxServer, loadConfig } = await import('./server.js');
+  const config = await loadConfig(configPath);
+  const server = new CmxServer(config);
+  await server.initialize();
+  const { text, success } = await server.execute(code);
+  if (success) {
+    console.log(text);
+    process.exit(0);
+  }
+  console.error(text);
+  process.exit(1);
 }
 
 main().catch(err => {

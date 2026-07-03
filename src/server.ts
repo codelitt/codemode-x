@@ -200,12 +200,15 @@ export class CmxServer {
       };
     }
 
-    const results = this.searchIndex.search(query);
-    const formatted = formatSearchResults(this.config.sdkName, results);
-
     return {
-      content: [{ type: 'text' as const, text: formatted }],
+      content: [{ type: 'text' as const, text: this.search(query) }],
     };
+  }
+
+  /** Search indexed tools, return formatted signatures + types. Shared by the MCP tool and the CLI. */
+  search(query: string): string {
+    const results = this.searchIndex.search(query);
+    return formatSearchResults(this.config.sdkName, results);
   }
 
   private async handleExecute(code: string) {
@@ -216,6 +219,15 @@ export class CmxServer {
       };
     }
 
+    const { text, success } = await this.execute(code);
+    return {
+      content: [{ type: 'text' as const, text }],
+      isError: !success,
+    };
+  }
+
+  /** Execute code in the sandbox, return formatted output. Shared by the MCP tool and the CLI. */
+  async execute(code: string): Promise<{ text: string; success: boolean }> {
     // Build proxy with current implementations
     this.callLog = [];
     const proxy = buildSdkProxy(
@@ -250,10 +262,7 @@ export class CmxServer {
 
     output.push(`\n(${result.durationMs}ms, ${this.callLog.length} API calls)`);
 
-    return {
-      content: [{ type: 'text' as const, text: output.join('\n') }],
-      isError: !result.success,
-    };
+    return { text: output.join('\n'), success: result.success };
   }
 
   async start(): Promise<void> {

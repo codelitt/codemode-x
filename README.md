@@ -468,6 +468,20 @@ User code  → cmx_execute → AST validation → VM sandbox → sdk.domain.meth
 npx codemode-x init     # interactive setup
 npx codemode-x test     # discover tools, show what Claude sees
 npx codemode-x start    # start MCP server (stdio)
+npx codemode-x search   # search tools from the terminal
+npx codemode-x exec     # run sandboxed code from the terminal
+```
+
+`search` prints the same tool signatures + TypeScript types that `cmx_search` returns over MCP:
+
+```bash
+npx codemode-x search "rent comps" ./codemode-x.config.js
+```
+
+`exec` runs a TypeScript/JavaScript file in the same sandbox as `cmx_execute` (pass `-` to read from stdin). Exits 0 on success, 1 on error:
+
+```bash
+echo 'return await sdk.api.getProperties();' | npx codemode-x exec - ./codemode-x.config.js
 ```
 
 ## Development
